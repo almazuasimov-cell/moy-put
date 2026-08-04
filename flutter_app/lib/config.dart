@@ -1,11 +1,10 @@
 /// Конфигурация приложения «Мой путь»
 class AppConfig {
   /// Базовый URL API. Меняется в настройках.
-  /// По умолчанию — WSL IP (для отладки на эмуляторе/USB).
-  /// Для телефона в той же WiFi-сети — Windows IP:8001
-  static const String defaultApiUrl = 'http://10.213.156.81:8001';
+  static const String defaultApiUrl = 'https://moy-way.ru';
 
-  static const String appVersion = '2.1.0';
+  static const String appVersion = '2.1.3';
+  static const int versionCode = 213;
   static const String appName = 'Мой путь';
 
   /// Ключ в SharedPreferences
@@ -13,4 +12,6 @@ class AppConfig {
   static const String tokenKey = 'auth_token';
   static const String userNameKey = 'user_name';
   static const String userIdKey = 'user_id';
+  static const String skippedVersionKey = 'skipped_version';
+  static const String installedVersionKey = 'installed_version';
 }

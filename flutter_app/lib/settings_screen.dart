@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'api_service.dart';
 import 'config.dart';
 import 'subscription_screen.dart';
+import 'referral_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   final VoidCallback? onLogout;
@@ -86,6 +87,58 @@ class SettingsScreen extends StatelessWidget {
                               const SizedBox(height: 2),
                               Text(
                                 'Управление тарифом и лимитами',
+                                style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Referral card
+              Card(
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ReferralScreen()),
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: Colors.amber.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.card_giftcard_rounded, color: Colors.amber),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Реферальная программа',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                  color: cs.onSurface,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Пригласи друга — получите по 300₽',
                                 style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                               ),
                             ],

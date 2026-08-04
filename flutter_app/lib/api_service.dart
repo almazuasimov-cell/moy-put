@@ -12,7 +12,8 @@ class ApiService {
 
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
-    _apiUrl = prefs.getString(AppConfig.apiUrlKey) ?? AppConfig.defaultApiUrl;
+    // Always use default API URL — ignore any saved local IP from development
+    _apiUrl = AppConfig.defaultApiUrl;
     _token = prefs.getString(AppConfig.tokenKey) ?? '';
   }
 
@@ -262,5 +263,54 @@ class ApiService {
       throw Exception(jsonDecode(resp.body)['detail'] ?? 'Ошибка удаления аккаунта');
     }
     await logout();
+  }
+
+  // ── Referral ───────────────────────────────────────────
+  static Future<String> getReferralCode() async {
+    final resp = await http.get(
+      Uri.parse('$_apiUrl/referral/code'),
+      headers: _headers,
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(jsonDecode(resp.body)['detail'] ?? 'Ошибка получения кода');
+    }
+    return jsonDecode(resp.body)['code'] as String;
+  }
+
+  static Future<Map<String, dynamic>> applyReferralCode(String code) async {
+    final resp = await http.post(
+      Uri.parse('$_apiUrl/referral/apply'),
+      headers: _headers,
+      body: jsonEncode({'code': code}),
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(jsonDecode(resp.body)['detail'] ?? 'Ошибка активации кода');
+    }
+    return jsonDecode(resp.body) as Map<String, dynamic>;
+  }
+
+  static Future<ReferralInfo> getReferralStats() async {
+    final resp = await http.get(
+      Uri.parse('$_apiUrl/referral/stats'),
+      headers: _headers,
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(jsonDecode(resp.body)['detail'] ?? 'Ошибка загрузки статистики');
+    }
+    return ReferralInfo.fromJson(jsonDecode(resp.body));
+  }
+
+  // ── App Update ─────────────────────────────────────────
+  static Future<Map<String, dynamic>> checkUpdate() async {
+    try {
+      final resp = await http.get(
+        Uri.parse('$_apiUrl/app/version'),
+        headers: _headers,
+      ).timeout(const Duration(seconds: 5));
+      if (resp.statusCode == 200) {
+        return jsonDecode(resp.body) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return {};
   }
 }

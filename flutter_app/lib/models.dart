@@ -182,3 +182,44 @@ class TagCount {
     );
   }
 }
+
+class ReferralInfo {
+  final String code;
+  final int balance;
+  final int invitedCount;
+  final List<ReferralItem> referrals;
+
+  ReferralInfo({
+    required this.code,
+    this.balance = 0,
+    this.invitedCount = 0,
+    this.referrals = const [],
+  });
+
+  factory ReferralInfo.fromJson(Map<String, dynamic> json) {
+    return ReferralInfo(
+      code: (json['code'] ?? '') as String,
+      balance: (json['balance'] ?? 0) as int,
+      invitedCount: (json['invited_count'] ?? 0) as int,
+      referrals: ((json['referrals'] ?? []) as List)
+          .map((e) => ReferralItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
+class ReferralItem {
+  final String name;
+  final String date;
+  final int bonus;
+
+  ReferralItem({required this.name, this.date = '', this.bonus = 0});
+
+  factory ReferralItem.fromJson(Map<String, dynamic> json) {
+    return ReferralItem(
+      name: (json['name'] ?? '') as String,
+      date: (json['date'] ?? '') as String,
+      bonus: (json['bonus'] ?? 0) as int,
+    );
+  }
+}

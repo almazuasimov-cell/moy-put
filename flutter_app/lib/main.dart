@@ -2,11 +2,13 @@
 /// Точка входа приложения
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 import 'auth_screen.dart';
 import 'home_screen.dart';
 import 'onboarding_screen.dart';
+import 'update_screen.dart';
 import 'config.dart';
 
 void main() {
@@ -28,6 +30,7 @@ class _MyAppState extends State<MyApp> {
   bool _initialized = false;
   bool _isLoggedIn = false;
   bool _showOnboarding = false;
+  Map<String, dynamic>? _updateInfo;
 
   @override
   void initState() {
@@ -39,9 +42,36 @@ class _MyAppState extends State<MyApp> {
     await ApiService.init();
     final prefs = await SharedPreferences.getInstance();
     final onboardingDone = prefs.getBool('onboarding_done') ?? false;
+
+    // Проверка обновления
+    Map<String, dynamic>? updateInfo;
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final currentCode = int.tryParse(info.buildNumber) ?? 0;
+      final skippedVersion = prefs.getInt(AppConfig.skippedVersionKey) ?? 0;
+
+      // Сохраняем текущую версию как установленную при первом запуске
+      final installedVersion = prefs.getInt(AppConfig.installedVersionKey) ?? 0;
+      if (installedVersion == 0 || currentCode > installedVersion) {
+        await prefs.setInt(AppConfig.installedVersionKey, currentCode);
+      }
+
+      final serverInfo = await ApiService.checkUpdate();
+      if (serverInfo.isNotEmpty) {
+        final serverCode = serverInfo['version_code'] ?? 0;
+        final isRequired = serverInfo['is_required'] ?? false;
+
+        if (serverCode > currentCode && serverCode != skippedVersion && isRequired) {
+          updateInfo = serverInfo;
+        }
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
     setState(() {
       _isLoggedIn = ApiService.isLoggedIn;
       _showOnboarding = !onboardingDone && !_isLoggedIn;
+      _updateInfo = updateInfo;
       _initialized = true;
     });
   }
@@ -56,11 +86,16 @@ class _MyAppState extends State<MyApp> {
       themeMode: ThemeMode.system,
       home: !_initialized
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-          : _showOnboarding
-              ? const OnboardingScreen()
-              : _isLoggedIn
-                  ? const HomeScreen()
-                  : const AuthScreen(),
+          : _updateInfo != null
+              ? UpdateScreen(
+                  updateInfo: _updateInfo!,
+                  forceUpdate: _updateInfo!['is_required'] ?? false,
+                )
+              : _showOnboarding
+                  ? const OnboardingScreen()
+                  : _isLoggedIn
+                      ? const HomeScreen()
+                      : const AuthScreen(),
     );
   }
 
