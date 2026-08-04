@@ -17,7 +17,7 @@ from subscription import check_limit, increment_usage
 from s3_service import upload_audio_to_s3, delete_audio_from_s3
 from prompts import PROCESS_ENTRY_PROMPT
 from ai_service import call_deepseek_async
-from config import OPENAI_API_KEY, OPENAI_BASE_URL
+from stt_service import transcribe_audio as local_transcribe
 
 router = APIRouter(tags=["entries"])
 
@@ -46,24 +46,12 @@ async def transcribe_audio(
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if not OPENAI_API_KEY:
-        raise HTTPException(status_code=500, detail="OpenAI API ключ не настроен")
     check_limit(user_id, db, "voice_entries")
     ip = get_client_ip(request)
     try:
         audio_bytes = await file.read()
         s3_key = upload_audio_to_s3(audio_bytes, user_id, file.filename or "audio.ogg")
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                f"{OPENAI_BASE_URL}/audio/transcriptions",
-                headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
-                files={"file": (file.filename or "audio.ogg", audio_bytes, file.content_type or "audio/ogg")},
-                data={"model": "whisper-1", "language": "ru"},
-            )
-            if resp.status_code != 200:
-                raise HTTPException(status_code=500, detail=f"Whisper error: {resp.text}")
-            result = resp.json()
-            text = result.get("text", "")
+        text = local_transcribe(audio_bytes, file.filename or "audio.ogg")
         increment_usage(user_id, db, "voice_entries")
         audit_log(db, user_id, "transcribe", ip, f"audio_s3_key={s3_key}")
         return {"text": text, "user_id": user_id, "audio_s3_key": s3_key}
