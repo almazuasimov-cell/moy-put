@@ -9,7 +9,7 @@ logger = logging.getLogger("voice-diary")
 
 # Lazy-loaded model (tiny, ~75 MB, fast on CPU)
 _model = None
-MODEL_SIZE = "tiny"
+MODEL_SIZE = "base"
 MODEL_DEVICE = "cpu"
 MODEL_COMPUTE = "int8"
 
@@ -53,7 +53,13 @@ def transcribe_audio(audio_bytes: bytes, filename: str = "audio.ogg", language: 
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as f:
         f.write(wav_bytes)
         f.flush()
-        segments, info = model.transcribe(f.name, language=language, beam_size=5)
+        segments, info = model.transcribe(
+            f.name, language=language,
+            beam_size=5,
+            vad_filter=True,
+            temperature=0.0,
+            vad_parameters=dict(min_silence_duration_ms=500),
+        )
         text = " ".join(seg.text for seg in segments)
 
     logger.info(f"Transcription done: {len(text)} chars, language={info.language}")
