@@ -14,6 +14,7 @@ class User(Base):
     consent_date = Column(DateTime(timezone=True), nullable=True)
     balance = Column(Integer, default=0)
     referral_code = Column(String, unique=True, index=True, nullable=True)
+    onboarding_completed = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), default=datetime.now(timezone.utc))
 
 

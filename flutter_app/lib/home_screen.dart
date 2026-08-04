@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'api_service.dart';
+import 'cache_service.dart';
 import 'models.dart';
 import 'record_screen.dart';
 import 'history_screen.dart';
@@ -22,6 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Stats? _stats;
   List<DiaryEntry> _recentEntries = [];
   bool _isLoading = true;
+  bool _isOffline = false;
   int _currentIndex = 0;
 
   @override
@@ -36,7 +38,16 @@ class _HomeScreenState extends State<HomeScreen> {
       _userName = (await ApiService.getUserName()) ?? 'Друг';
       _stats = await ApiService.getStats(period: 'month');
       _recentEntries = await ApiService.listEntries(limit: 5);
-    } catch (_) {}
+      _isOffline = false;
+      // Cache fresh data
+      CacheService.cacheEntries(_recentEntries);
+      if (_stats != null) CacheService.cacheStats(_stats!);
+    } catch (_) {
+      // Offline — load from cache
+      _isOffline = true;
+      _recentEntries = await CacheService.getCachedEntries();
+      _stats = await CacheService.getCachedStats();
+    }
     if (mounted) setState(() => _isLoading = false);
   }
 
@@ -96,9 +107,27 @@ class _HomeScreenState extends State<HomeScreen> {
   // ── Home tab ──────────────────────────────────────────
   Widget _buildHomeTab(ThemeData theme, ColorScheme cs) {
     return SafeArea(
-      child: RefreshIndicator(
-        onRefresh: _loadData,
-        child: CustomScrollView(
+      child: Column(
+        children: [
+          // Offline banner
+          if (_isOffline)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+              color: Colors.orange.shade100,
+              child: Row(
+                children: [
+                  Icon(Icons.cloud_off_rounded, size: 16, color: Colors.orange.shade800),
+                  const SizedBox(width: 8),
+                  Text('Офлайн — показаны кешированные данные',
+                      style: TextStyle(fontSize: 12, color: Colors.orange.shade800)),
+                ],
+              ),
+            ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _loadData,
+              child: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(
               child: Padding(
@@ -186,7 +215,10 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-    );
+      ),  // Expanded
+    ],    // Column children
+  ),      // Column
+);        // SafeArea
   }
 
   Widget _statCard(String label, String value, IconData icon, ColorScheme cs) {

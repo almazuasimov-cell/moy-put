@@ -3,14 +3,58 @@ import 'package:flutter/material.dart';
 
 import 'api_service.dart';
 import 'config.dart';
+import 'notification_service.dart';
 import 'subscription_screen.dart';
 import 'referral_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   final VoidCallback? onLogout;
   final bool isSetup;
 
   const SettingsScreen({super.key, this.onLogout, this.isSetup = false});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _reminderEnabled = false;
+  int _reminderHour = 21;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReminderSettings();
+  }
+
+  Future<void> _loadReminderSettings() async {
+    final enabled = await NotificationService.isReminderEnabled();
+    final hour = await NotificationService.getReminderTime();
+    if (mounted) setState(() { _reminderEnabled = enabled; _reminderHour = hour; });
+  }
+
+  Future<void> _exportData(String format) async {
+    try {
+      final url = '${ApiService.apiUrl}/export?format=$format';
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Не удалось открыть ссылку для скачивания')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка экспорта: $e'), backgroundColor: Colors.red.shade700),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,14 +63,14 @@ class SettingsScreen extends StatelessWidget {
     final urlController = TextEditingController(text: ApiService.apiUrl);
 
     return Scaffold(
-      appBar: AppBar(title: Text(isSetup ? 'Настройка сервера' : 'Профиль')),
+      appBar: AppBar(title: Text(widget.isSetup ? 'Настройка сервера' : 'Профиль')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Profile header
-            if (!isSetup) ...[
+            if (!widget.isSetup) ...[
               Center(
                 child: Column(
                   children: [
@@ -153,6 +197,89 @@ class SettingsScreen extends StatelessWidget {
               const SizedBox(height: 24),
             ],
 
+            // Notification settings
+            if (!widget.isSetup) ...[
+              Text('Уведомления', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: cs.onSurface)),
+              const SizedBox(height: 12),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Ежедневное напоминание'),
+                        subtitle: Text(
+                          _reminderEnabled
+                              ? 'Каждый день в $_reminderHour:00'
+                              : 'Напоминание записать дневник',
+                        ),
+                        value: _reminderEnabled,
+                        onChanged: (v) async {
+                          await NotificationService.setReminderEnabled(v);
+                          setState(() => _reminderEnabled = v);
+                        },
+                      ),
+                      if (_reminderEnabled) ...[
+                        const Divider(),
+                        Row(
+                          children: [
+                            const Text('Время:'),
+                            const SizedBox(width: 12),
+                            DropdownButton<int>(
+                              value: _reminderHour,
+                              items: List.generate(24, (h) => DropdownMenuItem(
+                                value: h,
+                                child: Text('${h.toString().padLeft(2, '0')}:00'),
+                              )),
+                              onChanged: (h) async {
+                                if (h != null) {
+                                  await NotificationService.setReminderTime(h);
+                                  setState(() => _reminderHour = h);
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
+            // Export data
+            if (!widget.isSetup) ...[
+              Text('Данные', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: cs.onSurface)),
+              const SizedBox(height: 12),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.download_rounded),
+                        title: const Text('Экспорт JSON'),
+                        subtitle: const Text('Все записи в формате JSON'),
+                        onTap: () => _exportData('json'),
+                      ),
+                      const Divider(),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.table_chart_rounded),
+                        title: const Text('Экспорт CSV'),
+                        subtitle: const Text('Все записи в формате CSV (Excel)'),
+                        onTap: () => _exportData('csv'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
             // Server URL
             Text('Подключение к серверу', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
@@ -177,7 +304,7 @@ class SettingsScreen extends StatelessWidget {
                       backgroundColor: ok ? Colors.green.shade700 : Colors.red.shade700,
                     ),
                   );
-                  if (ok && isSetup) {
+                  if (ok && widget.isSetup) {
                     Navigator.pop(context, urlController.text.trim());
                   }
                 }
@@ -187,7 +314,7 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 32),
 
             // App info
-            if (!isSetup) ...[
+            if (!widget.isSetup) ...[
               Card(
                 child: ListTile(
                   leading: Icon(Icons.info_outline, color: cs.primary),
@@ -211,8 +338,8 @@ class SettingsScreen extends StatelessWidget {
                       ],
                     ),
                   );
-                  if (confirmed == true && onLogout != null) {
-                    onLogout!();
+                  if (confirmed == true && widget.onLogout != null) {
+                    widget.onLogout!();
                   }
                 },
                 icon: const Icon(Icons.logout_rounded),
@@ -255,7 +382,7 @@ class SettingsScreen extends StatelessWidget {
                             backgroundColor: Colors.green,
                           ),
                         );
-                        if (onLogout != null) onLogout!();
+                        if (widget.onLogout != null) widget.onLogout!();
                       }
                     } catch (e) {
                       if (context.mounted) {

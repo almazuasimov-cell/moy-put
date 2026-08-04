@@ -22,6 +22,7 @@ class TokenResponse(BaseModel):
     name: str
     plan: str = "free"
     balance: int = 0
+    onboarding_completed: bool = False
 
 
 class DiaryEntryCreate(BaseModel):

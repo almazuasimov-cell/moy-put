@@ -9,6 +9,7 @@ import 'auth_screen.dart';
 import 'home_screen.dart';
 import 'onboarding_screen.dart';
 import 'update_screen.dart';
+import 'notification_service.dart';
 import 'config.dart';
 
 void main() {
@@ -40,8 +41,9 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _initApp() async {
     await ApiService.init();
+    await NotificationService.init();
     final prefs = await SharedPreferences.getInstance();
-    final onboardingDone = prefs.getBool('onboarding_done') ?? false;
+    final onboardingDone = prefs.getBool(AppConfig.onboardingDoneKey) ?? false;
 
     // Проверка обновления
     Map<String, dynamic>? updateInfo;

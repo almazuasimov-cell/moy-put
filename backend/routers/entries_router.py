@@ -1,7 +1,10 @@
 """Diary entries CRUD + AI processing + STT."""
+import csv
+import io
 import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 import httpx
@@ -185,3 +188,47 @@ def delete_entry(
     db.commit()
     audit_log(db, user_id, "delete_entry", get_client_ip(request), f"entry_id={entry_id}")
     return {"status": "deleted"}
+
+
+@router.get("/export")
+def export_entries(
+    format: str = "json",
+    user_id: int = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Export all user entries as JSON or CSV."""
+    entries = db.query(DiaryEntry).filter(
+        DiaryEntry.user_id == user_id
+    ).order_by(desc(DiaryEntry.created_at)).all()
+
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["id", "date", "mood", "tags", "topics", "transcript", "structured", "summary", "reflection"])
+        for e in entries:
+            writer.writerow([
+                e.id,
+                e.created_at.isoformat() if e.created_at else "",
+                e.mood,
+                ", ".join(e.tags or []),
+                ", ".join(e.topics or []),
+                e.transcript_text or "",
+                e.structured_text or "",
+                e.ai_summary or "",
+                e.reflection or "",
+            ])
+        csv_bytes = output.getvalue().encode("utf-8-sig")
+        return StreamingResponse(
+            io.BytesIO(csv_bytes),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=my_path_export.csv"},
+        )
+
+    # JSON (default)
+    data = [_entry_out(e) for e in entries]
+    json_bytes = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+    return StreamingResponse(
+        io.BytesIO(json_bytes),
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=my_path_export.json"},
+    )

@@ -36,7 +36,7 @@ def register(data: RegisterRequest, request: Request, db: Session = Depends(get_
     db.commit()
     audit_log(db, user.id, "register", get_client_ip(request))
     token = create_access_token({"sub": str(user.id)})
-    return TokenResponse(access_token=token, user_id=user.id, name=user.name, plan="free", balance=0)
+    return TokenResponse(access_token=token, user_id=user.id, name=user.name, plan="free", balance=0, onboarding_completed=False)
 
 
 @router.post("/auth/login", response_model=TokenResponse)
@@ -49,7 +49,7 @@ def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)):
     balance = user.balance or 0
     token = create_access_token({"sub": str(user.id)})
     audit_log(db, user.id, "login", get_client_ip(request))
-    return TokenResponse(access_token=token, user_id=user.id, name=user.name, plan=plan, balance=balance)
+    return TokenResponse(access_token=token, user_id=user.id, name=user.name, plan=plan, balance=balance, onboarding_completed=user.onboarding_completed)
 
 
 @router.delete("/account")
@@ -74,3 +74,16 @@ def delete_account(
     db.commit()
     logger.info(f"ACCOUNT DELETED user={user_id} ip={ip}")
     return {"status": "deleted", "message": "Все ваши данные полностью удалены"}
+
+
+@router.post("/auth/onboarding/complete")
+def complete_onboarding(
+    user_id: int = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    user.onboarding_completed = True
+    db.commit()
+    return {"status": "ok", "onboarding_completed": True}

@@ -153,6 +153,15 @@ class Stats {
       streak: (json['streak'] ?? 0) as int,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'total_entries': totalEntries,
+    'period_entries': periodEntries,
+    'avg_mood': avgMood,
+    'mood_trend': moodTrend.map((e) => e.toJson()).toList(),
+    'top_tags': topTags.map((e) => e.toJson()).toList(),
+    'streak': streak,
+  };
 }
 
 class MoodPoint {
@@ -167,6 +176,8 @@ class MoodPoint {
       mood: (json['mood'] ?? 5) as int,
     );
   }
+
+  Map<String, dynamic> toJson() => {'date': date, 'mood': mood};
 }
 
 class TagCount {
@@ -181,6 +192,8 @@ class TagCount {
       count: (json['count'] ?? 0) as int,
     );
   }
+
+  Map<String, dynamic> toJson() => {'tag': tag, 'count': count};
 }
 
 class ReferralInfo {

@@ -76,6 +76,9 @@ class ApiService {
     await prefs.setString(AppConfig.tokenKey, _token);
     await prefs.setString(AppConfig.userNameKey, data['name'] as String);
     await prefs.setInt(AppConfig.userIdKey, data['user_id'] as int);
+    // Save onboarding status from server
+    final onboardDone = data['onboarding_completed'] as bool? ?? false;
+    await prefs.setBool(AppConfig.onboardingDoneKey, onboardDone);
   }
 
   static Future<String?> getUserName() async {
@@ -298,6 +301,22 @@ class ApiService {
       throw Exception(jsonDecode(resp.body)['detail'] ?? 'Ошибка загрузки статистики');
     }
     return ReferralInfo.fromJson(jsonDecode(resp.body));
+  }
+
+  // ── Onboarding ─────────────────────────────────────────
+  static Future<void> completeOnboarding() async {
+    try {
+      await http.post(
+        Uri.parse('$_apiUrl/auth/onboarding/complete'),
+        headers: _headers,
+      );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(AppConfig.onboardingDoneKey, true);
+    } catch (_) {
+      // If server call fails, still mark locally
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(AppConfig.onboardingDoneKey, true);
+    }
   }
 
   // ── App Update ─────────────────────────────────────────

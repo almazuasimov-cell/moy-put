@@ -1,7 +1,9 @@
 /// Онбординг — 3 экрана при первом запуске
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'api_service.dart';
 import 'auth_screen.dart';
+import 'config.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -40,7 +42,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   void _finish() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('onboarding_done', true);
+    await prefs.setBool(AppConfig.onboardingDoneKey, true);
+    // Notify server if logged in
+    if (ApiService.isLoggedIn) {
+      ApiService.completeOnboarding(); // fire-and-forget
+    }
     if (mounted) {
       Navigator.pushReplacement(
         context,
