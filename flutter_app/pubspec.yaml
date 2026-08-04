@@ -1,7 +1,7 @@
 name: moy_put
 description: "Мой путь — AI Voice Diary"
 publish_to: 'none'
-version: 2.2.0+220
+version: 2.2.1+221
 
 environment:
   sdk: ^3.5.0

@@ -3,8 +3,8 @@ class AppConfig {
   /// Базовый URL API. Меняется в настройках.
   static const String defaultApiUrl = 'https://moy-way.ru';
 
-  static const String appVersion = '2.2.0';
-  static const int versionCode = 220;
+  static const String appVersion = '2.2.1';
+  static const int versionCode = 221;
   static const String appName = 'Мой путь';
 
   /// Ключ в SharedPreferences
