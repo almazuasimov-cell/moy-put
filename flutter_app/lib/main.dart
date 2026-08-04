@@ -2,9 +2,11 @@
 /// Точка входа приложения
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 import 'auth_screen.dart';
 import 'home_screen.dart';
+import 'onboarding_screen.dart';
 import 'config.dart';
 
 void main() {
@@ -25,6 +27,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   bool _initialized = false;
   bool _isLoggedIn = false;
+  bool _showOnboarding = false;
 
   @override
   void initState() {
@@ -34,8 +37,11 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _initApp() async {
     await ApiService.init();
+    final prefs = await SharedPreferences.getInstance();
+    final onboardingDone = prefs.getBool('onboarding_done') ?? false;
     setState(() {
       _isLoggedIn = ApiService.isLoggedIn;
+      _showOnboarding = !onboardingDone && !_isLoggedIn;
       _initialized = true;
     });
   }
@@ -50,15 +56,17 @@ class _MyAppState extends State<MyApp> {
       themeMode: ThemeMode.system,
       home: !_initialized
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-          : _isLoggedIn
-              ? const HomeScreen()
-              : const AuthScreen(),
+          : _showOnboarding
+              ? const OnboardingScreen()
+              : _isLoggedIn
+                  ? const HomeScreen()
+                  : const AuthScreen(),
     );
   }
 
   ThemeData _buildTheme(Brightness brightness) {
     final isDark = brightness == Brightness.dark;
-    final seed = isDark ? const Color(0xFF6750A4) : const Color(0xFF6750A4);
+    final seed = const Color(0xFF6750A4);
     final scheme = ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
 
     return ThemeData(

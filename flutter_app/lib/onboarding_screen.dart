@@ -1,0 +1,194 @@
+/// Онбординг — 3 экрана при первом запуске
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'auth_screen.dart';
+
+class OnboardingScreen extends StatefulWidget {
+  const OnboardingScreen({super.key});
+
+  @override
+  State<OnboardingScreen> createState() => _OnboardingScreenState();
+}
+
+class _OnboardingScreenState extends State<OnboardingScreen> {
+  final _pageController = PageController();
+  int _currentPage = 0;
+
+  static const _pages = [
+    _OnboardingPage(
+      icon: Icons.mic_rounded,
+      title: 'Рассказывай о себе',
+      description:
+          'Просто нажми на микрофон и говори.\nAI превратит твой голос в красивую\nдневниковую запись.',
+      color: Color(0xFF6750A4),
+    ),
+    _OnboardingPage(
+      icon: Icons.auto_awesome_rounded,
+      title: 'AI анализирует твой путь',
+      description:
+          'Настроение, теги, темы, вопросы\nдля размышления — AI помогает\nпонять себя глубже.',
+      color: Color(0xFF386A20),
+    ),
+    _OnboardingPage(
+      icon: Icons.menu_book_rounded,
+      title: 'Твоя биография\nрастёт с каждым днём',
+      description:
+          'Из всех записей AI напишет твою\nличную книгу. А позже — создаст\nфильм о твоей жизни.',
+      color: Color(0xFF9C4040),
+    ),
+  ];
+
+  void _finish() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('onboarding_done', true);
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const AuthScreen()),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Skip button
+            Align(
+              alignment: Alignment.topRight,
+              child: TextButton(
+                onPressed: _finish,
+                child: Text(
+                  'Пропустить',
+                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+            ),
+            // Pages
+            Expanded(
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: _pages.length,
+                onPageChanged: (i) => setState(() => _currentPage = i),
+                itemBuilder: (_, i) => _pages[i].build(context),
+              ),
+            ),
+            // Indicators + button
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Dots
+                  Row(
+                    children: List.generate(
+                      _pages.length,
+                      (i) => AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        margin: const EdgeInsets.only(right: 8),
+                        width: _currentPage == i ? 24 : 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: _currentPage == i
+                              ? _pages[i].color
+                              : theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Next / Start button
+                  FilledButton(
+                    onPressed: () {
+                      if (_currentPage < _pages.length - 1) {
+                        _pageController.nextPage(
+                          duration: const Duration(milliseconds: 400),
+                          curve: Curves.easeInOut,
+                        );
+                      } else {
+                        _finish();
+                      }
+                    },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _pages[_currentPage].color,
+                    ),
+                    child: Text(
+                      _currentPage < _pages.length - 1 ? 'Далее' : 'Начать',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OnboardingPage {
+  final IconData icon;
+  final String title;
+  final String description;
+  final Color color;
+
+  const _OnboardingPage({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.color,
+  });
+
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 40),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Icon in circle
+          Container(
+            width: 140,
+            height: 140,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color.withOpacity(0.1),
+            ),
+            child: Icon(icon, size: 64, color: color),
+          ),
+          const SizedBox(height: 48),
+          // Title
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Description
+          Text(
+            description,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

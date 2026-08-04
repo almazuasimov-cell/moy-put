@@ -5,7 +5,7 @@ class AppConfig {
   /// Для телефона в той же WiFi-сети — Windows IP:8001
   static const String defaultApiUrl = 'http://10.213.156.81:8001';
 
-  static const String appVersion = '1.0.0';
+  static const String appVersion = '2.1.0';
   static const String appName = 'Мой путь';
 
   /// Ключ в SharedPreferences

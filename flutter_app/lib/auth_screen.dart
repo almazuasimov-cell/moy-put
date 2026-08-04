@@ -1,5 +1,6 @@
 /// Экран входа/регистрации
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'api_service.dart';
 import 'config.dart';
 import 'home_screen.dart';
@@ -15,6 +16,7 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   bool _isLogin = true;
   bool _isLoading = false;
+  bool _consent = false;
   final _phoneController = TextEditingController();
   final _nameController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -44,6 +46,10 @@ class _AuthScreenState extends State<AuthScreen> {
       _showError('Введи имя');
       return;
     }
+    if (!_isLogin && !_consent) {
+      _showError('Необходимо согласие на обработку персональных данных');
+      return;
+    }
     setState(() => _isLoading = true);
     try {
       if (_isLogin) {
@@ -53,6 +59,7 @@ class _AuthScreenState extends State<AuthScreen> {
           _phoneController.text.trim(),
           _nameController.text.trim(),
           _passwordController.text,
+          consent: true,
         );
       }
       if (mounted) {
@@ -72,6 +79,14 @@ class _AuthScreenState extends State<AuthScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: Colors.red.shade700),
     );
+  }
+
+  Future<void> _openPrivacyPolicy() async {
+    final url = '${ApiService.apiUrl}/privacy';
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   @override
@@ -139,7 +154,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 keyboardType: TextInputType.phone,
                 decoration: const InputDecoration(
                   labelText: 'Телефон',
-                  hintText: '+79991234567',
+                  hintText: '+799****4567',
                   prefixIcon: Icon(Icons.phone_outlined),
                   border: OutlineInputBorder(),
                 ),
@@ -155,7 +170,63 @@ class _AuthScreenState extends State<AuthScreen> {
                   border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+
+              // Consent checkbox (only for registration)
+              if (!_isLogin) ...[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Checkbox(
+                        value: _consent,
+                        onChanged: (v) => setState(() => _consent = v ?? false),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => _consent = !_consent),
+                        child: RichText(
+                          text: TextSpan(
+                            style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant, height: 1.4),
+                            children: [
+                              const TextSpan(text: 'Я даю согласие на обработку '),
+                              TextSpan(
+                                text: 'персональных данных',
+                                style: TextStyle(color: cs.primary, decoration: TextDecoration.underline),
+                              ),
+                              const TextSpan(
+                                text: ', включая голосовые записи (биометрия), '
+                                    'в соответствии с ',
+                              ),
+                              TextSpan(
+                                text: 'политикой конфиденциальности',
+                                style: TextStyle(color: cs.primary, decoration: TextDecoration.underline),
+                                recognizer: null, // handled by tap on whole text
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: _openPrivacyPolicy,
+                    icon: const Icon(Icons.privacy_tip_outlined, size: 16),
+                    label: const Text('Политика конфиденциальности', style: TextStyle(fontSize: 13)),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.only(left: 32)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
 
               FilledButton(
                 onPressed: _isLoading ? null : _submit,

@@ -33,11 +33,11 @@ class ApiService {
   };
 
   // ── Auth ──────────────────────────────────────────────
-  static Future<Map<String, dynamic>> register(String phone, String name, String password) async {
+  static Future<Map<String, dynamic>> register(String phone, String name, String password, {bool consent = false}) async {
     final resp = await http.post(
       Uri.parse('$_apiUrl/auth/register'),
       headers: _headers,
-      body: jsonEncode({'phone': phone, 'name': name, 'password': password}),
+      body: jsonEncode({'phone': phone, 'name': name, 'password': password, 'consent': consent}),
     );
     if (resp.statusCode != 200) {
       throw Exception(jsonDecode(resp.body)['detail'] ?? 'Ошибка регистрации');
@@ -231,5 +231,36 @@ class ApiService {
     } catch (_) {
       return false;
     }
+  }
+
+  // ── Subscription ──────────────────────────────────────
+  static Future<Map<String, dynamic>> getSubscription() async {
+    final resp = await http.get(Uri.parse('$_apiUrl/subscription'), headers: _headers);
+    if (resp.statusCode != 200) {
+      throw Exception('Ошибка загрузки подписки');
+    }
+    return jsonDecode(resp.body) as Map<String, dynamic>;
+  }
+
+  static Future<void> upgradeSubscription() async {
+    final resp = await http.post(
+      Uri.parse('$_apiUrl/subscription/upgrade'),
+      headers: _headers,
+    );
+    if (resp.statusCode != 200) {
+      throw Exception('Ошибка обновления подписки');
+    }
+  }
+
+  // ── Account ────────────────────────────────────────────
+  static Future<void> deleteAccount() async {
+    final resp = await http.delete(
+      Uri.parse('$_apiUrl/account'),
+      headers: _headers,
+    );
+    if (resp.statusCode != 200) {
+      throw Exception(jsonDecode(resp.body)['detail'] ?? 'Ошибка удаления аккаунта');
+    }
+    await logout();
   }
 }
