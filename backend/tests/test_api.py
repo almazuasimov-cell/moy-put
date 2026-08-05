@@ -288,6 +288,24 @@ def test_referral_stats():
     assert data["balance"] == 300
 
 
+# ── Biography tests ─────────────────────────────────────────────
+
+def test_biography_pdf_export_cyrillic_name():
+    # BUG: Content-Disposition раньше содержал кириллицу автора напрямую —
+    # HTTP-заголовки поддерживают только Latin-1, был 500 UnicodeEncodeError.
+    client.post("/auth/register", json={
+        "phone": "9990000400", "name": "Алмаз Уасимов", "password": "test12345", "consent": True,
+    })
+    resp = client.post("/auth/login", json={"phone": "9990000400", "password": "test12345"})
+    token = resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    client.put("/biography", json={"content": "# Обо мне\nТестовая биография."}, headers=headers)
+    resp = client.get("/biography/pdf", headers=headers)
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert "filename*=UTF-8''" in resp.headers["content-disposition"]
+
+
 # ── Stats / Health tests ───────────────────────────────────────
 
 def test_health():

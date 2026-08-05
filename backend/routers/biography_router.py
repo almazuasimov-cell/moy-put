@@ -1,6 +1,7 @@
 """Biography generation, CRUD, PDF export."""
 import io
 from datetime import datetime, timezone
+from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -125,8 +126,19 @@ def export_biography_pdf(
     doc.build(story)
     buf.seek(0)
     audit_log(db, user_id, "export_pdf", get_client_ip(request))
-    filename = f"biography_{author_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
+    date_str = datetime.now().strftime("%Y%m%d")
+    filename = f"biography_{author_name}_{date_str}.pdf"
+    # Content-Disposition — заголовок HTTP, поддерживает только Latin-1.
+    # Кириллица в имени файла ломала бы ответ 500 (UnicodeEncodeError) —
+    # ASCII-запасной вариант + filename* (RFC 6266) для настоящего UTF-8-имени.
+    ascii_fallback = f"biography_{date_str}.pdf"
+    encoded_filename = quote(filename)
     return StreamingResponse(
         buf, media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{ascii_fallback}"; '
+                f"filename*=UTF-8''{encoded_filename}"
+            )
+        },
     )
