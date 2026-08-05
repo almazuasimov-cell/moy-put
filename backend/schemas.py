@@ -1,7 +1,7 @@
 """Pydantic schemas for request/response validation."""
 import re
 from typing import Optional
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 
 PHONE_RE = re.compile(r"^\d{10,11}$")
 
@@ -11,21 +11,6 @@ class RegisterRequest(BaseModel):
     name: str
     password: str
     consent: bool = False
-
-    @field_validator("phone")
-    @classmethod
-    def validate_phone(cls, v: str) -> str:
-        v = v.strip()
-        if not PHONE_RE.match(v):
-            raise ValueError("Номер телефона должен состоять из 10-11 цифр")
-        return v
-
-    @field_validator("password")
-    @classmethod
-    def validate_password(cls, v: str) -> str:
-        if len(v) < 8:
-            raise ValueError("Пароль должен быть не короче 8 символов")
-        return v
 
 
 class LoginRequest(BaseModel):

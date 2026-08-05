@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from database import get_db
 from models import User, Subscription, DiaryEntry, DiaryBiography, AuditLog, Referral
-from schemas import RegisterRequest, LoginRequest, TokenResponse
+from schemas import RegisterRequest, LoginRequest, TokenResponse, PHONE_RE
 from auth import hash_password, verify_password, create_access_token, get_current_user, get_client_ip
 from audit import audit_log
 from s3_service import delete_all_user_audio
@@ -18,11 +18,16 @@ router = APIRouter(tags=["auth"])
 def register(data: RegisterRequest, request: Request, db: Session = Depends(get_db)):
     if not data.consent:
         raise HTTPException(status_code=400, detail="Необходимо согласие на обработку персональных данных")
-    existing = db.query(User).filter(User.phone == data.phone).first()
+    phone = data.phone.strip()
+    if not PHONE_RE.match(phone):
+        raise HTTPException(status_code=400, detail="Номер телефона должен состоять из 10-11 цифр")
+    if len(data.password) < 8:
+        raise HTTPException(status_code=400, detail="Пароль должен быть не короче 8 символов")
+    existing = db.query(User).filter(User.phone == phone).first()
     if existing:
         raise HTTPException(status_code=400, detail="Пользователь с таким телефоном уже существует")
     user = User(
-        phone=data.phone,
+        phone=phone,
         name=data.name,
         password_hash=hash_password(data.password),
         consent_given=True,

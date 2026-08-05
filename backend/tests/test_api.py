@@ -52,7 +52,8 @@ def test_register_rejects_invalid_phone():
         "password": "test12345",
         "consent": True,
     })
-    assert resp.status_code == 422
+    assert resp.status_code == 400
+    assert "телефон" in resp.json()["detail"].lower()
 
 
 def test_register_rejects_short_password():
@@ -62,7 +63,8 @@ def test_register_rejects_short_password():
         "password": "short1",
         "consent": True,
     })
-    assert resp.status_code == 422
+    assert resp.status_code == 400
+    assert "пароль" in resp.json()["detail"].lower()
 
 
 def test_register_no_consent():
