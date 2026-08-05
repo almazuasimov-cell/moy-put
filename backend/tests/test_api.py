@@ -116,6 +116,35 @@ def test_create_entry():
     assert "семья" in data["tags"]
 
 
+def test_create_entry_enforces_free_limit():
+    # SECURITY: POST /entries раньше не проверял лимит voice_entries вообще —
+    # можно было создавать записи напрямую, минуя /stt/transcribe.
+    token = _get_token("9990000109")
+    headers = {"Authorization": f"Bearer {token}"}
+    for i in range(3):
+        resp = client.post("/entries", json={
+            "transcript_text": f"Запись {i}", "mood": 5,
+        }, headers=headers)
+        assert resp.status_code == 200
+    # 4-я запись сверх бесплатного лимита (3) должна быть отклонена
+    resp = client.post("/entries", json={
+        "transcript_text": "Запись сверх лимита", "mood": 5,
+    }, headers=headers)
+    assert resp.status_code == 402
+
+
+def test_process_entry_enforces_free_limit():
+    # SECURITY: /entries/process (вызов DeepSeek) раньше был вообще без лимита.
+    token = _get_token("9990000110")
+    headers = {"Authorization": f"Bearer {token}"}
+    for i in range(3):
+        client.post("/entries", json={
+            "transcript_text": f"Запись {i}", "mood": 5,
+        }, headers=headers)
+    resp = client.post("/entries/process", json={"text": "текст"}, headers=headers)
+    assert resp.status_code == 402
+
+
 def test_list_entries():
     token = _get_token("9990000102")
     client.post("/entries", json={

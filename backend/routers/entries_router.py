@@ -46,13 +46,14 @@ async def transcribe_audio(
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Расход лимита учитывается при сохранении записи (POST /entries),
+    # здесь только предварительная проверка — не тратим Whisper впустую.
     check_limit(user_id, db, "voice_entries")
     ip = get_client_ip(request)
     try:
         audio_bytes = await file.read()
         s3_key = upload_audio_to_s3(audio_bytes, user_id, file.filename or "audio.ogg")
         text = local_transcribe(audio_bytes, file.filename or "audio.ogg")
-        increment_usage(user_id, db, "voice_entries")
         audit_log(db, user_id, "transcribe", ip, f"audio_s3_key={s3_key}")
         return {"text": text, "user_id": user_id, "audio_s3_key": s3_key}
     except HTTPException:
@@ -66,7 +67,11 @@ async def process_entry(
     data: ProcessRequest,
     request: Request,
     user_id: int = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
+    # Тот же лимит voice_entries — не тратим DeepSeek на пользователя,
+    # у которого уже нет квоты на запись дневника. Списание — при POST /entries.
+    check_limit(user_id, db, "voice_entries")
     try:
         prompt = PROCESS_ENTRY_PROMPT.format(text=data.text)
         content = await call_deepseek_async(prompt, "process_entry", user_id, max_tokens=2000, temperature=0.7)
@@ -99,10 +104,15 @@ def create_entry(
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Единственная точка реального списания лимита voice_entries — здесь
+    # запись действительно попадает в дневник, независимо от того, прошла
+    # ли она через /stt/transcribe и /entries/process или была отправлена напрямую.
+    check_limit(user_id, db, "voice_entries")
     entry = DiaryEntry(user_id=user_id, **data.model_dump())
     db.add(entry)
     db.commit()
     db.refresh(entry)
+    increment_usage(user_id, db, "voice_entries")
     audit_log(db, user_id, "create_entry", get_client_ip(request), f"entry_id={entry.id}")
     return _entry_out(entry)
 
