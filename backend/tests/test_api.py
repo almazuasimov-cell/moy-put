@@ -45,6 +45,16 @@ def test_register():
     assert data["plan"] == "free"
 
 
+def test_register_rejects_invalid_phone():
+    resp = client.post("/auth/register", json={
+        "phone": "abc-not-a-phone",
+        "name": "Test User",
+        "password": "test123",
+        "consent": True,
+    })
+    assert resp.status_code == 422
+
+
 def test_register_no_consent():
     resp = client.post("/auth/register", json={
         "phone": "9990000002",
