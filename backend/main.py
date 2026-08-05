@@ -15,8 +15,8 @@ logger = logging.getLogger("voice-diary")
 app = FastAPI(title="Voice Diary API — Мой путь", version=APP_VERSION)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=["https://moy-way.ru", "https://www.moy-way.ru"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
