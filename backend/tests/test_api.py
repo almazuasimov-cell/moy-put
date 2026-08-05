@@ -34,7 +34,7 @@ def test_register():
     resp = client.post("/auth/register", json={
         "phone": "9990000001",
         "name": "Test User",
-        "password": "test123",
+        "password": "test12345",
         "consent": True,
     })
     assert resp.status_code == 200
@@ -49,7 +49,17 @@ def test_register_rejects_invalid_phone():
     resp = client.post("/auth/register", json={
         "phone": "abc-not-a-phone",
         "name": "Test User",
-        "password": "test123",
+        "password": "test12345",
+        "consent": True,
+    })
+    assert resp.status_code == 422
+
+
+def test_register_rejects_short_password():
+    resp = client.post("/auth/register", json={
+        "phone": "9990000006",
+        "name": "Test User",
+        "password": "short1",
         "consent": True,
     })
     assert resp.status_code == 422
@@ -59,7 +69,7 @@ def test_register_no_consent():
     resp = client.post("/auth/register", json={
         "phone": "9990000002",
         "name": "No Consent",
-        "password": "test123",
+        "password": "test12345",
         "consent": False,
     })
     assert resp.status_code == 400
@@ -67,20 +77,20 @@ def test_register_no_consent():
 
 def test_register_duplicate():
     client.post("/auth/register", json={
-        "phone": "9990000003", "name": "First", "password": "test123", "consent": True,
+        "phone": "9990000003", "name": "First", "password": "test12345", "consent": True,
     })
     resp = client.post("/auth/register", json={
-        "phone": "9990000003", "name": "Second", "password": "test123", "consent": True,
+        "phone": "9990000003", "name": "Second", "password": "test12345", "consent": True,
     })
     assert resp.status_code == 400
 
 
 def test_login():
     client.post("/auth/register", json={
-        "phone": "9990000004", "name": "Login User", "password": "test123", "consent": True,
+        "phone": "9990000004", "name": "Login User", "password": "test12345", "consent": True,
     })
     resp = client.post("/auth/login", json={
-        "phone": "9990000004", "password": "test123",
+        "phone": "9990000004", "password": "test12345",
     })
     assert resp.status_code == 200
     data = resp.json()
@@ -90,7 +100,7 @@ def test_login():
 
 def test_login_wrong_password():
     client.post("/auth/register", json={
-        "phone": "9990000005", "name": "Wrong PW", "password": "test123", "consent": True,
+        "phone": "9990000005", "name": "Wrong PW", "password": "test12345", "consent": True,
     })
     resp = client.post("/auth/login", json={
         "phone": "9990000005", "password": "wrong",
@@ -107,9 +117,9 @@ def test_unauthorized():
 
 def _get_token(phone="9990000100"):
     client.post("/auth/register", json={
-        "phone": phone, "name": "Entry User", "password": "test123", "consent": True,
+        "phone": phone, "name": "Entry User", "password": "test12345", "consent": True,
     })
-    resp = client.post("/auth/login", json={"phone": phone, "password": "test123"})
+    resp = client.post("/auth/login", json={"phone": phone, "password": "test12345"})
     return resp.json()["access_token"]
 
 

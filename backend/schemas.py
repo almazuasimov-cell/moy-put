@@ -20,6 +20,13 @@ class RegisterRequest(BaseModel):
             raise ValueError("Номер телефона должен состоять из 10-11 цифр")
         return v
 
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Пароль должен быть не короче 8 символов")
+        return v
+
 
 class LoginRequest(BaseModel):
     phone: str
