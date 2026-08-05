@@ -180,15 +180,14 @@ def test_subscription_default():
     assert data["voice_entries_limit"] == 3
 
 
-def test_subscription_upgrade():
+def test_subscription_upgrade_not_available_without_payment():
+    # Оплата ещё не подключена — ручка не должна выдавать Premium бесплатно.
     token = _get_token("9990000201")
     resp = client.post("/subscription/upgrade", headers={"Authorization": f"Bearer {token}"})
-    assert resp.status_code == 200
-    assert resp.json()["plan"] == "premium"
-    # Verify
+    assert resp.status_code == 501
+    # Verify plan stayed free
     resp = client.get("/subscription", headers={"Authorization": f"Bearer {token}"})
-    assert resp.json()["plan"] == "premium"
-    assert resp.json()["voice_entries_limit"] == 999999
+    assert resp.json()["plan"] == "free"
 
 
 # ── Referral tests ─────────────────────────────────────────────

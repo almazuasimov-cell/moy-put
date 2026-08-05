@@ -1,6 +1,5 @@
 """Subscription endpoints."""
-from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 from schemas import SubscriptionInfo
@@ -30,9 +29,6 @@ def get_subscription(user_id: int = Depends(get_current_user), db: Session = Dep
 
 @router.post("/subscription/upgrade")
 def upgrade_subscription(user_id: int = Depends(get_current_user), db: Session = Depends(get_db)):
-    sub = get_or_create_subscription(user_id, db)
-    sub.plan = "premium"
-    sub.status = "active"
-    sub.expires_at = datetime.now(timezone.utc) + timedelta(days=30)
-    db.commit()
-    return {"status": "ok", "plan": "premium", "expires_at": sub.expires_at.isoformat()}
+    # Оплата ещё не подключена (планируется Т-Банк) — раньше эта ручка
+    # выдавала Premium бесплатно любому авторизованному пользователю.
+    raise HTTPException(status_code=501, detail="Оплата пока недоступна, скоро подключим")
