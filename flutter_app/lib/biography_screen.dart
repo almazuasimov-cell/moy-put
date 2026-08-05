@@ -1,8 +1,7 @@
 /// Экран биографии — генерация, просмотр, экспорт PDF
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:open_filex/open_filex.dart';
 import 'api_service.dart';
-import 'config.dart';
 
 class BiographyScreen extends StatefulWidget {
   const BiographyScreen({super.key});
@@ -64,13 +63,9 @@ class _BiographyScreenState extends State<BiographyScreen> {
 
   Future<void> _exportPdf() async {
     try {
-      final url = '${ApiService.apiUrl}/biography/pdf';
-      final uri = Uri.parse(url);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        _showError('Не удалось открыть PDF');
-      }
+      final path = await ApiService.downloadFile('/biography/pdf', 'biography.pdf');
+      if (!mounted) return;
+      await OpenFilex.open(path);
     } catch (e) {
       _showError('Ошибка экспорта: $e');
     }

@@ -1,12 +1,12 @@
 /// Экран настроек/профиля
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
 
 import 'api_service.dart';
 import 'config.dart';
 import 'notification_service.dart';
 import 'subscription_screen.dart';
 import 'referral_screen.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class SettingsScreen extends StatefulWidget {
   final VoidCallback? onLogout;
@@ -36,17 +36,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _exportData(String format) async {
     try {
-      final url = '${ApiService.apiUrl}/export?format=$format';
-      final uri = Uri.parse(url);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Не удалось открыть ссылку для скачивания')),
-          );
-        }
-      }
+      final path = await ApiService.downloadFile(
+        '/export?format=$format',
+        'my_path_export.$format',
+      );
+      if (!mounted) return;
+      await OpenFilex.open(path);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

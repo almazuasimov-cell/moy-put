@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'config.dart';
 import 'models.dart';
@@ -84,6 +85,24 @@ class ApiService {
   static Future<String?> getUserName() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(AppConfig.userNameKey);
+  }
+
+  // ── Download (export, biography PDF) ───────────────────
+  // Файл требует Authorization-заголовок — нельзя открыть напрямую
+  // во внешнем браузере (там нет токена), скачиваем внутри приложения.
+  static Future<String> downloadFile(String path, String filename) async {
+    final resp = await http.get(Uri.parse('$_apiUrl$path'), headers: _headers);
+    if (resp.statusCode != 200) {
+      String detail = 'Ошибка загрузки (${resp.statusCode})';
+      try {
+        detail = jsonDecode(resp.body)['detail'] ?? detail;
+      } catch (_) {}
+      throw Exception(detail);
+    }
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$filename');
+    await file.writeAsBytes(resp.bodyBytes);
+    return file.path;
   }
 
   // ── STT ───────────────────────────────────────────────
