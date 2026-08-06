@@ -98,6 +98,22 @@ class _RecordScreenState extends State<RecordScreen> with WidgetsBindingObserver
     }
     final status = await Permission.microphone.request();
     if (!mounted) return;
+    if (status.isPermanentlyDenied) {
+      // Пользователь отказал "навсегда" (или запретил в системных
+      // настройках) — повторный request() ничего не покажет, единственный
+      // выход — открыть настройки приложения вручную.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Доступ к микрофону запрещён. Открой настройки приложения, чтобы разрешить.'),
+          backgroundColor: Colors.red.shade700,
+          action: SnackBarAction(
+            label: 'Настройки',
+            onPressed: openAppSettings,
+          ),
+        ),
+      );
+      return;
+    }
     if (!status.isGranted) {
       _showError('Нужен доступ к микрофону');
       return;
