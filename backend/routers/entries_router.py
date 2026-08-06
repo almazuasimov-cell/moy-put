@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 import httpx
 from database import get_db
-from models import DiaryEntry
+from models import DiaryEntry, User
 from schemas import DiaryEntryCreate, ProcessRequest, ProcessResponse
 from auth import get_current_user, get_client_ip
 from audit import audit_log
@@ -44,9 +44,10 @@ def _entry_out(e: DiaryEntry) -> dict:
 async def transcribe_audio(
     request: Request,
     file: UploadFile = File(...),
-    user_id: int = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    user_id = user.id
     # Расход лимита учитывается при сохранении записи (POST /entries),
     # здесь только предварительная проверка — не тратим Whisper впустую.
     check_limit(user_id, db, "voice_entries")
@@ -72,9 +73,10 @@ async def transcribe_audio(
 async def process_entry(
     data: ProcessRequest,
     request: Request,
-    user_id: int = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    user_id = user.id
     # Тот же лимит voice_entries — не тратим DeepSeek на пользователя,
     # у которого уже нет квоты на запись дневника. Списание — при POST /entries.
     check_limit(user_id, db, "voice_entries")
@@ -107,9 +109,10 @@ async def process_entry(
 def create_entry(
     data: DiaryEntryCreate,
     request: Request,
-    user_id: int = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    user_id = user.id
     # Единственная точка реального списания лимита voice_entries — здесь
     # запись действительно попадает в дневник, независимо от того, прошла
     # ли она через /stt/transcribe и /entries/process или была отправлена напрямую.
@@ -126,7 +129,7 @@ def create_entry(
 
 @router.get("/entries")
 def list_entries(
-    user_id: int = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     date_from: str = "",
     date_to: str = "",
     tag: str = "",
@@ -136,6 +139,7 @@ def list_entries(
     offset: int = 0,
     db: Session = Depends(get_db),
 ):
+    user_id = user.id
     q = db.query(DiaryEntry).filter(DiaryEntry.user_id == user_id)
     if date_from:
         q = q.filter(DiaryEntry.created_at >= date_from)
@@ -160,8 +164,8 @@ def list_entries(
 
 
 @router.get("/entries/{entry_id}")
-def get_entry(entry_id: int, user_id: int = Depends(get_current_user), db: Session = Depends(get_db)):
-    entry = db.query(DiaryEntry).filter(DiaryEntry.id == entry_id, DiaryEntry.user_id == user_id).first()
+def get_entry(entry_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    entry = db.query(DiaryEntry).filter(DiaryEntry.id == entry_id, DiaryEntry.user_id == user.id).first()
     if not entry:
         raise HTTPException(status_code=404, detail="Запись не найдена")
     return _entry_out(entry)
@@ -171,10 +175,10 @@ def get_entry(entry_id: int, user_id: int = Depends(get_current_user), db: Sessi
 def update_entry(
     entry_id: int,
     data: DiaryEntryCreate,
-    user_id: int = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    entry = db.query(DiaryEntry).filter(DiaryEntry.id == entry_id, DiaryEntry.user_id == user_id).first()
+    entry = db.query(DiaryEntry).filter(DiaryEntry.id == entry_id, DiaryEntry.user_id == user.id).first()
     if not entry:
         raise HTTPException(status_code=404, detail="Запись не найдена")
     for field in ["transcript_text", "structured_text", "mood", "tags", "topics", "ai_summary", "reflection"]:
@@ -189,29 +193,29 @@ def update_entry(
 def delete_entry(
     entry_id: int,
     request: Request,
-    user_id: int = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    entry = db.query(DiaryEntry).filter(DiaryEntry.id == entry_id, DiaryEntry.user_id == user_id).first()
+    entry = db.query(DiaryEntry).filter(DiaryEntry.id == entry_id, DiaryEntry.user_id == user.id).first()
     if not entry:
         raise HTTPException(status_code=404, detail="Запись не найдена")
     if entry.audio_s3_key:
         delete_audio_from_s3(entry.audio_s3_key)
     db.delete(entry)
     db.commit()
-    audit_log(db, user_id, "delete_entry", get_client_ip(request), f"entry_id={entry_id}")
+    audit_log(db, user.id, "delete_entry", get_client_ip(request), f"entry_id={entry_id}")
     return {"status": "deleted"}
 
 
 @router.get("/export")
 def export_entries(
     format: str = "json",
-    user_id: int = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Export all user entries as JSON or CSV."""
     entries = db.query(DiaryEntry).filter(
-        DiaryEntry.user_id == user_id
+        DiaryEntry.user_id == user.id
     ).order_by(desc(DiaryEntry.created_at)).all()
 
     if format == "csv":

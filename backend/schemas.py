@@ -80,6 +80,6 @@ class ReferralApplyRequest(BaseModel):
 
 class ReferralInfo(BaseModel):
     code: str
-    balance: int
+    premium_days_earned: int
     invited_count: int
     referrals: list = []

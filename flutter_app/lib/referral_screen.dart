@@ -1,5 +1,5 @@
 /// Экран реферальной программы «Мой путь»
-/// Показывает код, баланс, поле ввода чужого кода и список приглашённых
+/// Показывает код, заработанные дни Premium, поле ввода чужого кода и список приглашённых
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'api_service.dart';
@@ -110,20 +110,21 @@ class _ReferralScreenState extends State<ReferralScreen> {
   }
 
   Widget _balanceCard(ColorScheme cs, ThemeData theme) {
+    final days = _info?.premiumDaysEarned ?? 0;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            Icon(Icons.account_balance_wallet_rounded, size: 40, color: cs.primary),
+            Icon(Icons.workspace_premium_rounded, size: 40, color: cs.primary),
             const SizedBox(height: 8),
             Text(
-              'Бонусный баланс',
+              'Заработано Premium',
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
             ),
             const SizedBox(height: 4),
             Text(
-              '${_info?.balance ?? 0} ₽',
+              '$days ${_pluralDays(days)}',
               style: theme.textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: cs.primary,
@@ -131,13 +132,27 @@ class _ReferralScreenState extends State<ReferralScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Можно использовать для оплаты Premium',
+              'Начисляется автоматически за приглашения',
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
             ),
           ],
         ),
       ),
     );
+  }
+
+  /// Русское склонение "день/дня/дней" — 1 день, 2-4 дня, 5+ дней
+  /// (с исключением 11-14, которые всегда "дней").
+  static String _pluralDays(int n) {
+    final n100 = n % 100;
+    if (n100 >= 11 && n100 <= 14) return 'дней';
+    switch (n % 10) {
+      case 1: return 'день';
+      case 2:
+      case 3:
+      case 4: return 'дня';
+      default: return 'дней';
+    }
   }
 
   Widget _myCodeCard(ColorScheme cs, ThemeData theme) {
@@ -190,7 +205,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Поделитесь кодом с друзьями — и вы оба получите по 300₽ на баланс!',
+              'Поделитесь кодом с друзьями — и вы оба получите по 10 дней Premium!',
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             ),
           ],
@@ -212,7 +227,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Введите реферальный код друга и получите 300₽ на баланс',
+              'Введите реферальный код друга и получите 10 дней Premium',
               style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
             ),
             const SizedBox(height: 12),
@@ -265,7 +280,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
                 title: Text(r.name, style: TextStyle(color: cs.onSurface)),
                 subtitle: Text(r.date, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                 trailing: Text(
-                  '+${r.bonus}₽',
+                  '+${r.bonus} ${_pluralDays(r.bonus)}',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Colors.green.shade600,

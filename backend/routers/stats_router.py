@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from database import get_db
-from models import DiaryEntry
+from models import DiaryEntry, User
 from auth import get_current_user
 from config import APP_VERSION, APP_VERSION_CODE, IS_POSTGRES, S3_ENABLED
 
@@ -40,7 +40,8 @@ def _calculate_streak(db: Session, user_id: int) -> int:
 
 
 @router.get("/stats")
-def get_stats(user_id: int = Depends(get_current_user), period: str = "month", db: Session = Depends(get_db)):
+def get_stats(user: User = Depends(get_current_user), period: str = "month", db: Session = Depends(get_db)):
+    user_id = user.id
     now = datetime.now(timezone.utc)
     if period == "week":
         since = now - timedelta(days=7)

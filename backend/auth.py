@@ -24,7 +24,12 @@ def create_access_token(data: dict) -> str:
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def get_current_user(authorization: str = Header(""), db: Session = Depends(get_db)):
+def get_current_user(authorization: str = Header(""), db: Session = Depends(get_db)) -> User:
+    """Возвращает объект User (не голый id) — раньше каждый роутер, которому
+    нужны были данные пользователя, заново лез в БД (~6 мест), а заодно
+    была необходима отдельная проверка "пользователь ещё существует"
+    (токен живёт 30 дней, за это время аккаунт могли удалить). Теперь это
+    один и тот же запрос, переиспользуемый роутерами через .id/атрибуты."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Требуется авторизация")
     token = authorization.split("Bearer ")[1]
@@ -36,12 +41,10 @@ def get_current_user(authorization: str = Header(""), db: Session = Depends(get_
         user_id = int(user_id)
     except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Невалидный токен")
-    # Токен валиден 30 дней — за это время пользователь мог удалить аккаунт.
-    # Без этой проверки удалённый пользователь с ещё живым токеном ловил
-    # 500 (IntegrityError) вместо честного 401 на первом же запросе.
-    if not db.query(User).filter(User.id == user_id).first():
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
         raise HTTPException(status_code=401, detail="Пользователь не найден")
-    return user_id
+    return user
 
 
 def get_client_ip(request: Request) -> str:

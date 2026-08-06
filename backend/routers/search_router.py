@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from database import get_db
-from models import DiaryEntry
+from models import DiaryEntry, User
 from schemas import SearchRequest
 from auth import get_current_user, get_client_ip
 from audit import audit_log
@@ -18,9 +18,10 @@ router = APIRouter(tags=["search"])
 async def search_diary(
     data: SearchRequest,
     request: Request,
-    user_id: int = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    user_id = user.id
     entries = (
         db.query(DiaryEntry)
         .filter(DiaryEntry.user_id == user_id)

@@ -1,8 +1,17 @@
 """Subscription management: limits, usage tracking."""
+from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from models import Subscription
 from config import FREE_LIMITS, PREMIUM_LIMITS
+
+
+def _aware(dt: datetime) -> datetime:
+    """SQLite (в тестах, в отличие от Postgres в проде) не сохраняет
+    timezone у DateTime(timezone=True) — значение возвращается naive,
+    и сравнение с datetime.now(timezone.utc) падает с TypeError. Считаем
+    naive-значения уже UTC (так они и записывались)."""
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
 def get_or_create_subscription(user_id: int, db: Session) -> Subscription:
@@ -12,6 +21,28 @@ def get_or_create_subscription(user_id: int, db: Session) -> Subscription:
         db.add(sub)
         db.commit()
         db.refresh(sub)
+        return sub
+    # expires_at хранился, но нигде не проверялся — Premium, выданный на
+    # ограниченный срок (например, за реферала), оставался бы навсегда.
+    # Ленивая проверка при каждом обращении к подписке — просрочен → free.
+    if sub.plan == "premium" and sub.expires_at and _aware(sub.expires_at) <= datetime.now(timezone.utc):
+        sub.plan = "free"
+        db.commit()
+    return sub
+
+
+def grant_premium_days(user_id: int, db: Session, days: int) -> Subscription:
+    """Продлевает Premium на `days` дней. Если пользователь уже Premium и
+    срок ещё не истёк — прибавляет к текущему expires_at (не сбрасывает
+    остаток), иначе отсчитывает от текущего момента."""
+    sub = get_or_create_subscription(user_id, db)
+    now = datetime.now(timezone.utc)
+    base = _aware(sub.expires_at) if (sub.expires_at and _aware(sub.expires_at) > now) else now
+    sub.plan = "premium"
+    sub.status = "active"
+    sub.expires_at = base + timedelta(days=days)
+    db.commit()
+    db.refresh(sub)
     return sub
 
 

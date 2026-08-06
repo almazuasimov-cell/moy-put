@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
+from models import User
 from schemas import SubscriptionInfo
 from auth import get_current_user
 from subscription import get_or_create_subscription
@@ -11,8 +12,8 @@ router = APIRouter(tags=["subscription"])
 
 
 @router.get("/subscription", response_model=SubscriptionInfo)
-def get_subscription(user_id: int = Depends(get_current_user), db: Session = Depends(get_db)):
-    sub = get_or_create_subscription(user_id, db)
+def get_subscription(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    sub = get_or_create_subscription(user.id, db)
     limits = PREMIUM_LIMITS if sub.plan == "premium" and sub.status == "active" else FREE_LIMITS
     return SubscriptionInfo(
         plan=sub.plan,
@@ -28,7 +29,7 @@ def get_subscription(user_id: int = Depends(get_current_user), db: Session = Dep
 
 
 @router.post("/subscription/upgrade")
-def upgrade_subscription(user_id: int = Depends(get_current_user), db: Session = Depends(get_db)):
+def upgrade_subscription(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     # Оплата ещё не подключена (планируется Т-Банк) — раньше эта ручка
     # выдавала Premium бесплатно любому авторизованному пользователю.
     raise HTTPException(status_code=501, detail="Оплата пока недоступна, скоро подключим")

@@ -43,6 +43,11 @@ AUDIO_RETENTION_DAYS = int(os.environ.get("AUDIO_RETENTION_DAYS", "365"))
 # загрузка без проверки размера могла нагрузить небольшой VPS.
 MAX_AUDIO_UPLOAD_BYTES = int(os.environ.get("MAX_AUDIO_UPLOAD_BYTES", str(25 * 1024 * 1024)))
 
+# ── Referral ──────────────────────────────────────────────────
+# Раньше — 300₽ каждому; теперь дни Premium (мотивирует пользоваться
+# приложением, а не просто копить деньги на балансе).
+REFERRAL_PREMIUM_DAYS = int(os.environ.get("REFERRAL_PREMIUM_DAYS", "10"))
+
 # ── Subscription limits ───────────────────────────────────────
 FREE_LIMITS = {
     "voice_entries": 3,

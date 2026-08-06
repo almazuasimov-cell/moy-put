@@ -370,17 +370,22 @@ def test_referral_code():
 
 
 def test_referral_apply():
-    # User 1 gets code
+    # Реферальный бонус — дни Premium, а не деньги на баланс.
     token1 = _get_token("9990000301")
     code_resp = client.get("/referral/code", headers={"Authorization": f"Bearer {token1}"})
     code = code_resp.json()["code"]
 
-    # User 2 applies it
     token2 = _get_token("9990000302")
     resp = client.post("/referral/apply", json={"code": code}, headers={"Authorization": f"Bearer {token2}"})
     assert resp.status_code == 200
-    assert resp.json()["bonus"] == 300
-    assert resp.json()["balance"] == 300
+    assert resp.json()["bonus_days"] == 10
+    assert resp.json()["premium_until"] is not None
+
+    # Оба участника реально получили Premium — не только приглашённый.
+    resp1 = client.get("/subscription", headers={"Authorization": f"Bearer {token1}"})
+    assert resp1.json()["plan"] == "premium"
+    resp2 = client.get("/subscription", headers={"Authorization": f"Bearer {token2}"})
+    assert resp2.json()["plan"] == "premium"
 
 
 def test_referral_self_apply():
@@ -403,7 +408,31 @@ def test_referral_stats():
     assert resp.status_code == 200
     data = resp.json()
     assert data["invited_count"] == 1
-    assert data["balance"] == 300
+    assert data["premium_days_earned"] == 10
+
+
+def test_premium_expires_and_downgrades_to_free():
+    # BUG: expires_at хранился в БД, но нигде не проверялся — Premium,
+    # выданный на ограниченный срок (например, за реферала), оставался бы
+    # навсегда. Ленивая проверка должна понизить план при следующем обращении.
+    from subscription import grant_premium_days, get_or_create_subscription
+
+    token = _get_token("9990000306")
+    from jose import jwt as jose_jwt
+    from config import SECRET_KEY, ALGORITHM
+    user_id = int(jose_jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])["sub"])
+
+    db = SessionLocal()
+    grant_premium_days(user_id, db, 10)
+    sub = get_or_create_subscription(user_id, db)
+    assert sub.plan == "premium"
+    # Искусственно переносим expires_at в прошлое — как будто срок истёк.
+    sub.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
+    db.commit()
+    db.close()
+
+    resp = client.get("/subscription", headers={"Authorization": f"Bearer {token}"})
+    assert resp.json()["plan"] == "free"  # автоматически понижен при обращении
 
 
 # ── Biography tests ─────────────────────────────────────────────

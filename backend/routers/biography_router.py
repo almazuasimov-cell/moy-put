@@ -49,9 +49,10 @@ def build_biography_context(entries_desc, max_chars: int = MAX_BIOGRAPHY_CONTEXT
 @router.post("/biography/generate")
 async def generate_biography(
     request: Request,
-    user_id: int = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    user_id = user.id
     entries = (
         db.query(DiaryEntry)
         .filter(DiaryEntry.user_id == user_id)
@@ -88,8 +89,8 @@ async def generate_biography(
 
 
 @router.get("/biography")
-def get_biography(user_id: int = Depends(get_current_user), db: Session = Depends(get_db)):
-    bio = db.query(DiaryBiography).filter(DiaryBiography.user_id == user_id).first()
+def get_biography(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    bio = db.query(DiaryBiography).filter(DiaryBiography.user_id == user.id).first()
     if not bio:
         return {"content": "", "generated_at": None}
     return {
@@ -99,13 +100,13 @@ def get_biography(user_id: int = Depends(get_current_user), db: Session = Depend
 
 
 @router.put("/biography")
-def update_biography(data: BiographyUpdate, user_id: int = Depends(get_current_user), db: Session = Depends(get_db)):
-    bio = db.query(DiaryBiography).filter(DiaryBiography.user_id == user_id).first()
+def update_biography(data: BiographyUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    bio = db.query(DiaryBiography).filter(DiaryBiography.user_id == user.id).first()
     if bio:
         bio.content = data.content
         bio.updated_at = datetime.now(timezone.utc)
     else:
-        bio = DiaryBiography(user_id=user_id, content=data.content)
+        bio = DiaryBiography(user_id=user.id, content=data.content)
         db.add(bio)
     db.commit()
     return {"status": "updated"}
@@ -114,14 +115,13 @@ def update_biography(data: BiographyUpdate, user_id: int = Depends(get_current_u
 @router.get("/biography/pdf")
 def export_biography_pdf(
     request: Request,
-    user_id: int = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    bio = db.query(DiaryBiography).filter(DiaryBiography.user_id == user_id).first()
+    bio = db.query(DiaryBiography).filter(DiaryBiography.user_id == user.id).first()
     if not bio or not bio.content:
         raise HTTPException(status_code=404, detail="Биография не найдена. Сначала сгенерируйте её.")
-    user = db.query(User).filter(User.id == user_id).first()
-    author_name = user.name if user else "Автор"
+    author_name = user.name
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -169,7 +169,7 @@ def export_biography_pdf(
             story.append(Paragraph(safe_line, body_style))
     doc.build(story)
     buf.seek(0)
-    audit_log(db, user_id, "export_pdf", get_client_ip(request))
+    audit_log(db, user.id, "export_pdf", get_client_ip(request))
     date_str = datetime.now().strftime("%Y%m%d")
     filename = f"biography_{author_name}_{date_str}.pdf"
     # Content-Disposition — заголовок HTTP, поддерживает только Latin-1.

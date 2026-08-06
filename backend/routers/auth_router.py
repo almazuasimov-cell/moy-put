@@ -60,14 +60,12 @@ def login(data: LoginRequest, request: Request, db: Session = Depends(get_db)):
 @router.delete("/account")
 def delete_account(
     request: Request,
-    user_id: int = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    user_id = user.id
     ip = get_client_ip(request)
     delete_all_user_audio(user_id, db)
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
     db.query(DiaryEntry).filter(DiaryEntry.user_id == user_id).delete()
     db.query(DiaryBiography).filter(DiaryBiography.user_id == user_id).delete()
     db.query(Subscription).filter(Subscription.user_id == user_id).delete()
@@ -88,12 +86,9 @@ def delete_account(
 
 @router.post("/auth/onboarding/complete")
 def complete_onboarding(
-    user_id: int = Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
     user.onboarding_completed = True
     db.commit()
     return {"status": "ok", "onboarding_completed": True}
