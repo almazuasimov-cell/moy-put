@@ -175,15 +175,39 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ],
       ),
     );
-    if (confirmed == true) {
-      try {
-        await ApiService.deleteEntry(e.id!);
-        _loadEntries();
-      } catch (err) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $err'), backgroundColor: Colors.red.shade700),
-        );
-      }
+    if (confirmed != true) return;
+    if (!mounted) return;
+
+    // Оптимистично убираем из списка сразу, но реально удаляем на сервере
+    // только после того, как снекбар с "Отменить" закроется — без этого
+    // удаление было безвозвратным сразу после подтверждения.
+    final index = _entries.indexOf(e);
+    setState(() => _entries.remove(e));
+    var undone = false;
+
+    final controller = ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Запись удалена'),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'Отменить',
+          onPressed: () {
+            undone = true;
+            if (mounted) setState(() => _entries.insert(index.clamp(0, _entries.length), e));
+          },
+        ),
+      ),
+    );
+    await controller.closed;
+    if (undone || !mounted) return;
+    try {
+      await ApiService.deleteEntry(e.id!);
+    } catch (err) {
+      if (!mounted) return;
+      setState(() => _entries.insert(index.clamp(0, _entries.length), e));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ошибка удаления: $err'), backgroundColor: Colors.red.shade700),
+      );
     }
   }
 
