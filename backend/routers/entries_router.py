@@ -5,7 +5,6 @@ import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
-from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 import httpx
@@ -15,11 +14,11 @@ from schemas import DiaryEntryCreate, ProcessRequest, ProcessResponse
 from auth import get_current_user, get_client_ip
 from audit import audit_log
 from subscription import check_limit, check_and_increment_usage
-from s3_service import upload_audio_to_s3, delete_audio_from_s3
+from s3_service import delete_audio_from_s3
 from prompts import PROCESS_ENTRY_PROMPT
 from ai_service import call_deepseek_async
-from stt_service import transcribe_audio as local_transcribe
-from config import MAX_AUDIO_UPLOAD_BYTES
+from queue_service import enqueue_transcription, TranscriptionQueueError, TranscriptionTimeoutError
+from config import MAX_AUDIO_UPLOAD_BYTES, TRANSCRIBE_QUEUE_TIMEOUT_S
 
 router = APIRouter(tags=["entries"])
 
@@ -60,15 +59,24 @@ async def transcribe_audio(
                 status_code=413,
                 detail=f"Аудио слишком большое (максимум {MAX_AUDIO_UPLOAD_BYTES // (1024 * 1024)}МБ)",
             )
-        # run_in_threadpool — оба вызова синхронные и блокирующие (ffmpeg +
-        # faster-whisper CPU-инференс, boto3 сетевой I/O). Вызванные напрямую
-        # внутри async def, они блокировали бы весь event loop воркера —
-        # ЛЮБОЙ другой запрос на этом воркере (не только другая транскрипция)
-        # ждал бы, пока не закончится текущая. При двух одновременных записях
-        # (обычное дело для дневника, которым пользуются утром/вечером)
-        # это уже заметная деградация.
-        s3_key = await run_in_threadpool(upload_audio_to_s3, audio_bytes, user_id, file.filename or "audio.ogg")
-        text = await run_in_threadpool(local_transcribe, audio_bytes, file.filename or "audio.ogg")
+        # S3-загрузка и faster-whisper CPU-инференс уходят в очередь RQ и
+        # выполняются отдельными воркер-процессами (см. queue_service.py) —
+        # это не только снимает блокировку event loop, но и ограничивает
+        # РЕАЛЬНЫЙ параллелизм числом воркеров (2, по числу vCPU), а не
+        # оставляет его на волю дефолтного threadpool'а starlette, который
+        # пускал бы много одновременных транскрипций драться за одно и то
+        # же ядро. HTTP-запрос по-прежнему ждёт готовый результат — контракт
+        # для Flutter-клиента не меняется.
+        try:
+            result = await enqueue_transcription(
+                audio_bytes, file.filename or "audio.ogg", user_id,
+                timeout=TRANSCRIBE_QUEUE_TIMEOUT_S,
+            )
+        except TranscriptionTimeoutError:
+            raise HTTPException(status_code=503, detail="Сервер перегружен, попробуйте ещё раз через минуту")
+        except TranscriptionQueueError:
+            raise HTTPException(status_code=500, detail="Ошибка распознавания")
+        text, s3_key = result["text"], result["audio_s3_key"]
         audit_log(db, user_id, "transcribe", ip, f"audio_s3_key={s3_key}")
         return {"text": text, "user_id": user_id, "audio_s3_key": s3_key}
     except HTTPException:

@@ -39,6 +39,10 @@ S3_SECRET_KEY = os.environ.get(_SSK, "")
 S3_BUCKET = os.environ.get("S3_BUCKET", "voice-diary-audio")
 S3_REGION = os.environ.get("S3_REGION", "ru-1")
 AUDIO_RETENTION_DAYS = int(os.environ.get("AUDIO_RETENTION_DAYS", "365"))
+
+# ── Queue (транскрипция через RQ) ────────────────────────────────
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+TRANSCRIBE_QUEUE_TIMEOUT_S = int(os.environ.get("TRANSCRIBE_QUEUE_TIMEOUT_S", "60"))
 # ~25 минут при 128kbps AAC — щедро для голосового дневника; без лимита
 # загрузка без проверки размера могла нагрузить небольшой VPS.
 MAX_AUDIO_UPLOAD_BYTES = int(os.environ.get("MAX_AUDIO_UPLOAD_BYTES", str(25 * 1024 * 1024)))

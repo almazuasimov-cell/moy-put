@@ -147,9 +147,12 @@ def test_transcribe_rejects_oversized_audio(monkeypatch):
     # BUG: не было лимита на размер загружаемого аудио — большой файл
     # мог нагрузить небольшой VPS (ffmpeg + faster-whisper).
     import routers.entries_router as entries_mod
+
+    async def _should_not_be_called(*a, **kw):
+        raise AssertionError("очередь транскрипции не должна вызываться для завышенного файла")
+
     monkeypatch.setattr(entries_mod, "MAX_AUDIO_UPLOAD_BYTES", 10)
-    monkeypatch.setattr(entries_mod, "local_transcribe", lambda *a, **kw: "не должно вызваться")
-    monkeypatch.setattr(entries_mod, "upload_audio_to_s3", lambda *a, **kw: "не должно вызваться")
+    monkeypatch.setattr(entries_mod, "enqueue_transcription", _should_not_be_called)
 
     token = _get_token("9990000112")
     resp = client.post(
@@ -158,6 +161,49 @@ def test_transcribe_rejects_oversized_audio(monkeypatch):
         files={"file": ("test.m4a", b"x" * 100, "audio/m4a")},
     )
     assert resp.status_code == 413
+
+
+def test_transcribe_returns_queue_result(monkeypatch):
+    # Проверяем сквозную работу с очередью: /stt/transcribe отдаёт клиенту
+    # ровно то, что вернул enqueue_transcription (RQ-воркер), не меняя
+    # HTTP-контракт по сравнению с прежним прямым вызовом.
+    import routers.entries_router as entries_mod
+
+    async def _fake_enqueue(audio_bytes, filename, user_id, timeout=60):
+        return {"text": "тестовая расшифровка", "audio_s3_key": "audio/999/fake.m4a"}
+
+    monkeypatch.setattr(entries_mod, "enqueue_transcription", _fake_enqueue)
+
+    token = _get_token("9990000113")
+    resp = client.post(
+        "/stt/transcribe",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("test.m4a", b"x" * 100, "audio/m4a")},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["text"] == "тестовая расшифровка"
+    assert data["audio_s3_key"] == "audio/999/fake.m4a"
+
+
+def test_transcribe_returns_503_on_queue_timeout(monkeypatch):
+    # Если воркеры перегружены и задача не обработана за отведённое время —
+    # клиент должен получить понятную 503, а не зависнуть/500.
+    import routers.entries_router as entries_mod
+    from queue_service import TranscriptionTimeoutError
+
+    async def _fake_enqueue(audio_bytes, filename, user_id, timeout=60):
+        raise TranscriptionTimeoutError("fake-job-id")
+
+    monkeypatch.setattr(entries_mod, "enqueue_transcription", _fake_enqueue)
+
+    token = _get_token("9990000114")
+    resp = client.post(
+        "/stt/transcribe",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("test.m4a", b"x" * 100, "audio/m4a")},
+    )
+    assert resp.status_code == 503
 
 
 def test_create_entry():
