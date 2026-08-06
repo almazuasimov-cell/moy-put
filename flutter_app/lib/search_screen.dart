@@ -39,11 +39,13 @@ class _SearchScreenState extends State<SearchScreen> {
     _scrollToBottom();
     try {
       final answer = await ApiService.searchDiary(query);
+      if (!mounted) return;
       setState(() {
         _messages.add(_ChatMessage(text: answer, isUser: false));
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _messages.add(_ChatMessage(text: 'Ошибка: $e', isUser: false));
         _isLoading = false;

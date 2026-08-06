@@ -32,8 +32,11 @@ class _BiographyScreenState extends State<BiographyScreen> {
   Future<void> _loadBiography() async {
     setState(() => _isLoading = true);
     try {
-      _content = await ApiService.getBiography();
-      _editController.text = _content;
+      final content = await ApiService.getBiography();
+      if (mounted) {
+        _content = content;
+        _editController.text = _content;
+      }
     } catch (_) {}
     if (mounted) setState(() => _isLoading = false);
   }
@@ -41,7 +44,9 @@ class _BiographyScreenState extends State<BiographyScreen> {
   Future<void> _generate() async {
     setState(() => _isGenerating = true);
     try {
-      _content = await ApiService.generateBiography();
+      final content = await ApiService.generateBiography();
+      if (!mounted) return;
+      _content = content;
       _editController.text = _content;
     } catch (e) {
       _showError(e.toString().replaceFirst('Exception: ', ''));
@@ -53,6 +58,7 @@ class _BiographyScreenState extends State<BiographyScreen> {
   Future<void> _saveEdit() async {
     try {
       await ApiService.updateBiography(_editController.text);
+      if (!mounted) return;
       _content = _editController.text;
       setState(() => _isEditing = false);
       _showSuccess('Сохранено');
@@ -72,12 +78,14 @@ class _BiographyScreenState extends State<BiographyScreen> {
   }
 
   void _showError(String msg) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: Colors.red.shade700),
     );
   }
 
   void _showSuccess(String msg) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: Colors.green.shade700),
     );

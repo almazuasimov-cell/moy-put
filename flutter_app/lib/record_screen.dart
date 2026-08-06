@@ -62,6 +62,7 @@ class _RecordScreenState extends State<RecordScreen> {
 
   Future<void> _startRecording() async {
     final status = await Permission.microphone.request();
+    if (!mounted) return;
     if (!status.isGranted) {
       _showError('Нужен доступ к микрофону');
       return;
@@ -73,6 +74,7 @@ class _RecordScreenState extends State<RecordScreen> {
         RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 128000, sampleRate: 44100),
         path: path,
       );
+      if (!mounted) return;
       setState(() {
         _isRecording = true;
         _recordingPath = path;
@@ -87,6 +89,7 @@ class _RecordScreenState extends State<RecordScreen> {
   Future<void> _stopRecording() async {
     try {
       await _audioRecorder.stop();
+      if (!mounted) return;
       setState(() => _isRecording = false);
 
       // Auto-transcribe
@@ -94,16 +97,19 @@ class _RecordScreenState extends State<RecordScreen> {
         setState(() => _isProcessing = true);
         try {
           final text = await ApiService.transcribeAudio(File(_recordingPath!));
+          if (!mounted) return;
           _textController.text = text;
           setState(() => _isProcessing = false);
           // Auto-process
           await _process();
         } catch (e) {
+          if (!mounted) return;
           setState(() => _isProcessing = false);
           _showError('Распознавание: $e');
         }
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isRecording = false);
       _showError('Ошибка остановки: $e');
     }
@@ -117,6 +123,7 @@ class _RecordScreenState extends State<RecordScreen> {
     setState(() => _isProcessing = true);
     try {
       final result = await ApiService.processEntry(_textController.text);
+      if (!mounted) return;
       setState(() {
         _result = result;
         _mood = result.mood;
@@ -165,6 +172,7 @@ class _RecordScreenState extends State<RecordScreen> {
   }
 
   void _showError(String msg) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: Colors.red.shade700),
     );
