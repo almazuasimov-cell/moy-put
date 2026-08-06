@@ -2,6 +2,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:record/record.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'api_service.dart';
@@ -16,13 +17,15 @@ class RecordScreen extends StatefulWidget {
   State<RecordScreen> createState() => _RecordScreenState();
 }
 
-class _RecordScreenState extends State<RecordScreen> {
+class _RecordScreenState extends State<RecordScreen> with WidgetsBindingObserver {
   final _audioRecorder = AudioRecorder();
+  final _audioPlayer = AudioPlayer();
   final _textController = TextEditingController();
 
   bool _isRecording = false;
   bool _isProcessing = false;
   bool _hasProcessed = false;
+  bool _isPlaying = false;
   String? _recordingPath;
   String? _audioS3Key;
 
@@ -35,6 +38,10 @@ class _RecordScreenState extends State<RecordScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _audioPlayer.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _isPlaying = false);
+    });
     if (widget.existingEntry != null) {
       final e = widget.existingEntry!;
       _textController.text = e.structuredText.isNotEmpty ? e.structuredText : e.transcriptText;
@@ -49,9 +56,31 @@ class _RecordScreenState extends State<RecordScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _textController.dispose();
     _audioRecorder.dispose();
+    _audioPlayer.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Входящий звонок, сворачивание приложения и т.п. во время записи —
+    // не оставляем recorder работать в никуда, аккуратно останавливаем.
+    if (state == AppLifecycleState.paused && _isRecording) {
+      _cancelRecording();
+    }
+  }
+
+  Future<void> _togglePlayback() async {
+    if (_recordingPath == null) return;
+    if (_isPlaying) {
+      await _audioPlayer.pause();
+      if (mounted) setState(() => _isPlaying = false);
+    } else {
+      await _audioPlayer.play(DeviceFileSource(_recordingPath!));
+      if (mounted) setState(() => _isPlaying = true);
+    }
   }
 
   Future<void> _toggleRecording() async {
@@ -63,6 +92,10 @@ class _RecordScreenState extends State<RecordScreen> {
   }
 
   Future<void> _startRecording() async {
+    if (_isPlaying) {
+      await _audioPlayer.stop();
+      _isPlaying = false;
+    }
     final status = await Permission.microphone.request();
     if (!mounted) return;
     if (!status.isGranted) {
@@ -85,6 +118,23 @@ class _RecordScreenState extends State<RecordScreen> {
       });
     } catch (e) {
       _showError('Ошибка записи: $e');
+    }
+  }
+
+  /// Отменить запись в процессе — остановить и удалить файл, без
+  /// распознавания/сохранения. Также срабатывает при сворачивании
+  /// приложения (входящий звонок и т.п.) во время записи.
+  Future<void> _cancelRecording() async {
+    try {
+      final path = await _audioRecorder.stop();
+      final file = File(path ?? _recordingPath ?? '');
+      if (await file.exists()) await file.delete();
+    } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _isRecording = false;
+        _recordingPath = null;
+      });
     }
   }
 
@@ -209,23 +259,39 @@ class _RecordScreenState extends State<RecordScreen> {
           children: [
             // Record button
             if (!isEditing) ...[
-              Center(
-                child: GestureDetector(
-                  onTap: _toggleRecording,
-                  child: Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: _isRecording ? Colors.red.shade400 : cs.primaryContainer,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  if (_isRecording) ...[
+                    IconButton(
+                      onPressed: _cancelRecording,
+                      icon: const Icon(Icons.close_rounded),
+                      tooltip: 'Отменить запись',
+                      style: IconButton.styleFrom(
+                        backgroundColor: cs.surfaceContainerHighest,
+                        minimumSize: const Size(48, 48),
+                      ),
                     ),
-                    child: Icon(
-                      _isRecording ? Icons.stop_rounded : Icons.mic_rounded,
-                      size: 48,
-                      color: _isRecording ? Colors.white : cs.primary,
+                    const SizedBox(width: 20),
+                  ],
+                  GestureDetector(
+                    onTap: _toggleRecording,
+                    child: Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _isRecording ? Colors.red.shade400 : cs.primaryContainer,
+                      ),
+                      child: Icon(
+                        _isRecording ? Icons.stop_rounded : Icons.mic_rounded,
+                        size: 48,
+                        color: _isRecording ? Colors.white : cs.primary,
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
               const SizedBox(height: 12),
               Center(
@@ -234,6 +300,16 @@ class _RecordScreenState extends State<RecordScreen> {
                   style: TextStyle(color: cs.onSurfaceVariant),
                 ),
               ),
+              if (!_isRecording && _recordingPath != null) ...[
+                const SizedBox(height: 16),
+                Center(
+                  child: OutlinedButton.icon(
+                    onPressed: _togglePlayback,
+                    icon: Icon(_isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                    label: Text(_isPlaying ? 'Пауза' : 'Прослушать запись'),
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
             ],
 
