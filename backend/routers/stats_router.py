@@ -94,7 +94,7 @@ def app_version():
     return {
         "version": APP_VERSION,
         "version_code": APP_VERSION_CODE,
-        "changelog": "Экспорт записей и биографии теперь работает; исправлены переходные краши, уведомления-напоминания и стабильность при плохой связи",
+        "changelog": "Прослушивание записи до сохранения, отмена записи, возврат к записи при сбое сети, undo при удалении, корректная кириллица в PDF",
         "is_required": False,
         "apk_url": "https://moy-way.ru/apk/app-release.apk",
     }
