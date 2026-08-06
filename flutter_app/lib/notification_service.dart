@@ -1,4 +1,5 @@
 /// Локальные push-уведомления — ежедневные напоминания
+import 'dart:io';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -23,8 +24,36 @@ class NotificationService {
     );
   }
 
-  /// Включить/выключить ежедневное напоминание
-  static Future<void> setReminderEnabled(bool enabled) async {
+  /// Запросить разрешение на уведомления (Android 13+ требует явного
+  /// запроса, иначе локальные уведомления молча не показываются).
+  static Future<bool> requestPermission() async {
+    if (Platform.isAndroid) {
+      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      final granted = await androidPlugin?.requestNotificationsPermission();
+      return granted ?? true;
+    }
+    if (Platform.isIOS) {
+      final iosPlugin = _plugin.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
+      final granted = await iosPlugin?.requestPermissions(alert: true, badge: true, sound: true);
+      return granted ?? true;
+    }
+    return true;
+  }
+
+  /// Включить/выключить ежедневное напоминание.
+  /// Возвращает false, если пользователь включил, но ОС отказала в разрешении —
+  /// раньше переключатель молча оставался "включённым", а уведомления не приходили.
+  static Future<bool> setReminderEnabled(bool enabled) async {
+    if (enabled) {
+      final granted = await requestPermission();
+      if (!granted) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(_reminderKey, false);
+        return false;
+      }
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_reminderKey, enabled);
     if (enabled) {
@@ -32,6 +61,7 @@ class NotificationService {
     } else {
       await _plugin.cancelAll();
     }
+    return true;
   }
 
   /// Проверить, включено ли напоминание

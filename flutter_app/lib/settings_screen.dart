@@ -211,8 +211,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                         value: _reminderEnabled,
                         onChanged: (v) async {
-                          await NotificationService.setReminderEnabled(v);
-                          setState(() => _reminderEnabled = v);
+                          final ok = await NotificationService.setReminderEnabled(v);
+                          if (!mounted) return;
+                          setState(() => _reminderEnabled = ok && v);
+                          if (v && !ok) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Нет разрешения на уведомления — включите его в настройках телефона'),
+                                backgroundColor: Colors.orange,
+                              ),
+                            );
+                          }
                         },
                       ),
                       if (_reminderEnabled) ...[
