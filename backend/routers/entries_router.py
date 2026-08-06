@@ -138,9 +138,17 @@ def list_entries(
         q = q.filter(DiaryEntry.mood >= mood_min)
     if mood_max < 10:
         q = q.filter(DiaryEntry.mood <= mood_max)
-    entries = q.order_by(desc(DiaryEntry.created_at)).offset(offset).limit(limit).all()
+    q = q.order_by(desc(DiaryEntry.created_at))
     if tag:
-        entries = [e for e in entries if tag in (e.tags or [])]
+        # tags — JSON-колонка, кроссбазовый (SQLite/Postgres) SQL-фильтр
+        # по содержимому был бы хрупким. Фильтруем в Python до пагинации
+        # (не после neё — иначе offset/limit съедали часть подходящих
+        # записей). Дневник одного пользователя не настолько велик,
+        # чтобы это было проблемой производительности.
+        entries = [e for e in q.all() if tag in (e.tags or [])]
+        entries = entries[offset:offset + limit]
+    else:
+        entries = q.offset(offset).limit(limit).all()
     return [_entry_out(e) for e in entries]
 
 

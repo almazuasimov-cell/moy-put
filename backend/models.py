@@ -15,7 +15,7 @@ class User(Base):
     balance = Column(Integer, default=0)
     referral_code = Column(String, unique=True, index=True, nullable=True)
     onboarding_completed = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), default=datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class Subscription(Base):
@@ -28,8 +28,8 @@ class Subscription(Base):
     biography_generations_used = Column(Integer, default=0)
     ai_searches_used = Column(Integer, default=0)
     expires_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class DiaryEntry(Base):
@@ -44,8 +44,8 @@ class DiaryEntry(Base):
     ai_summary = Column(Text, default="")
     reflection = Column(Text, default="")
     audio_s3_key = Column(String, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class DiaryBiography(Base):
@@ -54,7 +54,7 @@ class DiaryBiography(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
     content = Column(Text, default="")
     generated_at = Column(DateTime(timezone=True), nullable=True)
-    updated_at = Column(DateTime(timezone=True), default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class AuditLog(Base):
@@ -64,7 +64,7 @@ class AuditLog(Base):
     action = Column(String, nullable=False)
     ip_address = Column(String, nullable=True)
     details = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), default=datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
 class Referral(Base):
@@ -73,4 +73,4 @@ class Referral(Base):
     inviter_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     invited_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
     bonus_amount = Column(Integer, default=300)
-    created_at = Column(DateTime(timezone=True), default=datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

@@ -6,6 +6,7 @@ import bcrypt
 from sqlalchemy.orm import Session
 from config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 from database import get_db
+from models import User
 
 
 def verify_password(plain: str, hashed: str) -> bool:
@@ -32,9 +33,15 @@ def get_current_user(authorization: str = Header(""), db: Session = Depends(get_
         user_id = payload.get("sub")
         if user_id is None:
             raise HTTPException(status_code=401, detail="Невалидный токен")
-        return int(user_id)
-    except JWTError:
+        user_id = int(user_id)
+    except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Невалидный токен")
+    # Токен валиден 30 дней — за это время пользователь мог удалить аккаунт.
+    # Без этой проверки удалённый пользователь с ещё живым токеном ловил
+    # 500 (IntegrityError) вместо честного 401 на первом же запросе.
+    if not db.query(User).filter(User.id == user_id).first():
+        raise HTTPException(status_code=401, detail="Пользователь не найден")
+    return user_id
 
 
 def get_client_ip(request: Request) -> str:

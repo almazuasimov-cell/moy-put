@@ -115,6 +115,23 @@ def test_unauthorized():
     assert resp.status_code == 401
 
 
+def test_deleted_user_token_returns_401_not_500():
+    # BUG: токен живёт 30 дней, но get_current_user не проверял, что
+    # пользователь ещё существует — удалённый пользователь с ещё
+    # действующим токеном ловил 500 (IntegrityError) вместо 401.
+    client.post("/auth/register", json={
+        "phone": "9990000007", "name": "To Delete", "password": "test12345", "consent": True,
+    })
+    resp = client.post("/auth/login", json={"phone": "9990000007", "password": "test12345"})
+    token = resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = client.delete("/account", headers=headers)
+    assert resp.status_code == 200
+    # Тот же (ещё не истёкший) токен — использовать после удаления аккаунта
+    resp = client.get("/entries", headers=headers)
+    assert resp.status_code == 401
+
+
 # ── Entries tests ──────────────────────────────────────────────
 
 def _get_token(phone="9990000100"):
@@ -179,6 +196,21 @@ def test_list_entries():
     assert resp.status_code == 200
     data = resp.json()
     assert len(data) == 2
+
+
+def test_list_entries_tag_filter_with_pagination():
+    # BUG: offset/limit применялись ДО фильтра по тегу — можно было
+    # пропустить часть подходящих записей при постраничной подгрузке.
+    token = _get_token("9990000111")
+    headers = {"Authorization": f"Bearer {token}"}
+    # C (новее всех) — с тегом, B — без тега, A (старее всех) — с тегом.
+    client.post("/entries", json={"transcript_text": "A", "mood": 5, "tags": ["work"]}, headers=headers)
+    client.post("/entries", json={"transcript_text": "B", "mood": 5, "tags": []}, headers=headers)
+    client.post("/entries", json={"transcript_text": "C", "mood": 5, "tags": ["work"]}, headers=headers)
+    resp = client.get("/entries?tag=work&limit=1&offset=0", headers=headers)
+    assert [e["transcript_text"] for e in resp.json()] == ["C"]
+    resp = client.get("/entries?tag=work&limit=1&offset=1", headers=headers)
+    assert [e["transcript_text"] for e in resp.json()] == ["A"]
 
 
 def test_get_entry():
@@ -353,7 +385,7 @@ def test_delete_account():
     resp = client.delete("/account", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200
     assert resp.json()["status"] == "deleted"
-    # Token still decodes but user's entries are gone → empty list
+    # Токен всё ещё декодируется, но пользователя больше нет — 401, а не
+    # тихий пустой список (см. test_deleted_user_token_returns_401_not_500).
     resp = client.get("/entries", headers={"Authorization": f"Bearer {token}"})
-    assert resp.status_code == 200
-    assert resp.json() == []
+    assert resp.status_code == 401
