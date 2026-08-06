@@ -20,6 +20,7 @@ jobs:
       - name: Run tests (venv staging уже содержит все зависимости)
         run: |
           cd backend
+          cp /home/deploy/ci/test.env .env
           /opt/voice-diary-staging/venv/bin/python3 -m pytest tests/ -q
 
   deploy-staging:
