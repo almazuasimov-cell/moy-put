@@ -11,6 +11,11 @@ class ApiService {
   static String _apiUrl = AppConfig.defaultApiUrl;
   static String _token = '';
 
+  // Без таймаута запрос при плохой связи мог зависнуть навсегда —
+  // обычные CRUD-запросы короче, ИИ-обработка (Whisper/DeepSeek) дольше.
+  static const _timeout = Duration(seconds: 15);
+  static const _aiTimeout = Duration(seconds: 60);
+
   static Future<void> init() async {
     final prefs = await SharedPreferences.getInstance();
     // Always use default API URL — ignore any saved local IP from development
@@ -40,7 +45,7 @@ class ApiService {
       Uri.parse('$_apiUrl/auth/register'),
       headers: _headers,
       body: jsonEncode({'phone': phone, 'name': name, 'password': password, 'consent': consent}),
-    );
+    ).timeout(_timeout);
     if (resp.statusCode != 200) {
       throw Exception(jsonDecode(resp.body)['detail'] ?? 'Ошибка регистрации');
     }
@@ -54,7 +59,7 @@ class ApiService {
       Uri.parse('$_apiUrl/auth/login'),
       headers: _headers,
       body: jsonEncode({'phone': phone, 'password': password}),
-    );
+    ).timeout(_timeout);
     if (resp.statusCode != 200) {
       throw Exception(jsonDecode(resp.body)['detail'] ?? 'Ошибка входа');
     }
@@ -91,7 +96,7 @@ class ApiService {
   // Файл требует Authorization-заголовок — нельзя открыть напрямую
   // во внешнем браузере (там нет токена), скачиваем внутри приложения.
   static Future<String> downloadFile(String path, String filename) async {
-    final resp = await http.get(Uri.parse('$_apiUrl$path'), headers: _headers);
+    final resp = await http.get(Uri.parse('$_apiUrl$path'), headers: _headers).timeout(_aiTimeout);
     if (resp.statusCode != 200) {
       String detail = 'Ошибка загрузки (${resp.statusCode})';
       try {
@@ -113,7 +118,7 @@ class ApiService {
     );
     req.headers['Authorization'] = 'Bearer $_token';
     req.files.add(await http.MultipartFile.fromPath('file', audioFile.path));
-    final resp = await req.send();
+    final resp = await req.send().timeout(_aiTimeout);
     if (resp.statusCode != 200) {
       final body = await resp.stream.bytesToString();
       throw Exception(jsonDecode(body)['detail'] ?? 'Ошибка распознавания');
@@ -128,7 +133,7 @@ class ApiService {
       Uri.parse('$_apiUrl/entries/process'),
       headers: _headers,
       body: jsonEncode({'text': text}),
-    );
+    ).timeout(_aiTimeout);
     if (resp.statusCode != 200) {
       throw Exception(jsonDecode(resp.body)['detail'] ?? 'Ошибка AI-обработки');
     }
@@ -141,7 +146,7 @@ class ApiService {
       Uri.parse('$_apiUrl/entries'),
       headers: _headers,
       body: jsonEncode(entry.toJson()),
-    );
+    ).timeout(_timeout);
     if (resp.statusCode != 200) {
       throw Exception('Ошибка сохранения записи');
     }
@@ -167,7 +172,7 @@ class ApiService {
     params['offset'] = offset.toString();
 
     final uri = Uri.parse('$_apiUrl/entries').replace(queryParameters: params);
-    final resp = await http.get(uri, headers: _headers);
+    final resp = await http.get(uri, headers: _headers).timeout(_timeout);
     if (resp.statusCode != 200) {
       throw Exception('Ошибка загрузки записей');
     }
@@ -176,7 +181,7 @@ class ApiService {
   }
 
   static Future<DiaryEntry> getEntry(int id) async {
-    final resp = await http.get(Uri.parse('$_apiUrl/entries/$id'), headers: _headers);
+    final resp = await http.get(Uri.parse('$_apiUrl/entries/$id'), headers: _headers).timeout(_timeout);
     if (resp.statusCode != 200) throw Exception('Запись не найдена');
     return DiaryEntry.fromJson(jsonDecode(resp.body));
   }
@@ -186,12 +191,12 @@ class ApiService {
       Uri.parse('$_apiUrl/entries/$id'),
       headers: _headers,
       body: jsonEncode(entry.toJson()),
-    );
+    ).timeout(_timeout);
     if (resp.statusCode != 200) throw Exception('Ошибка обновления');
   }
 
   static Future<void> deleteEntry(int id) async {
-    final resp = await http.delete(Uri.parse('$_apiUrl/entries/$id'), headers: _headers);
+    final resp = await http.delete(Uri.parse('$_apiUrl/entries/$id'), headers: _headers).timeout(_timeout);
     if (resp.statusCode != 200) throw Exception('Ошибка удаления');
   }
 
@@ -201,7 +206,7 @@ class ApiService {
       Uri.parse('$_apiUrl/search'),
       headers: _headers,
       body: jsonEncode({'query': query}),
-    );
+    ).timeout(_aiTimeout);
     if (resp.statusCode != 200) {
       throw Exception(jsonDecode(resp.body)['detail'] ?? 'Ошибка поиска');
     }
@@ -213,7 +218,7 @@ class ApiService {
     final resp = await http.post(
       Uri.parse('$_apiUrl/biography/generate'),
       headers: _headers,
-    );
+    ).timeout(_aiTimeout);
     if (resp.statusCode != 200) {
       throw Exception(jsonDecode(resp.body)['detail'] ?? 'Ошибка генерации');
     }
@@ -221,7 +226,7 @@ class ApiService {
   }
 
   static Future<String> getBiography() async {
-    final resp = await http.get(Uri.parse('$_apiUrl/biography'), headers: _headers);
+    final resp = await http.get(Uri.parse('$_apiUrl/biography'), headers: _headers).timeout(_timeout);
     if (resp.statusCode != 200) throw Exception('Ошибка загрузки биографии');
     final data = jsonDecode(resp.body);
     return (data['content'] ?? '') as String;
@@ -232,7 +237,7 @@ class ApiService {
       Uri.parse('$_apiUrl/biography'),
       headers: _headers,
       body: jsonEncode({'content': content}),
-    );
+    ).timeout(_timeout);
     if (resp.statusCode != 200) throw Exception('Ошибка сохранения');
   }
 
@@ -241,7 +246,7 @@ class ApiService {
     final resp = await http.get(
       Uri.parse('$_apiUrl/stats?period=$period'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
     if (resp.statusCode != 200) throw Exception('Ошибка статистики');
     return Stats.fromJson(jsonDecode(resp.body));
   }
@@ -249,7 +254,7 @@ class ApiService {
   // ── Health ────────────────────────────────────────────
   static Future<bool> checkHealth() async {
     try {
-      final resp = await http.get(Uri.parse('$_apiUrl/health'), headers: _headers);
+      final resp = await http.get(Uri.parse('$_apiUrl/health'), headers: _headers).timeout(const Duration(seconds: 5));
       return resp.statusCode == 200;
     } catch (_) {
       return false;
@@ -258,7 +263,7 @@ class ApiService {
 
   // ── Subscription ──────────────────────────────────────
   static Future<Map<String, dynamic>> getSubscription() async {
-    final resp = await http.get(Uri.parse('$_apiUrl/subscription'), headers: _headers);
+    final resp = await http.get(Uri.parse('$_apiUrl/subscription'), headers: _headers).timeout(_timeout);
     if (resp.statusCode != 200) {
       throw Exception('Ошибка загрузки подписки');
     }
@@ -269,7 +274,7 @@ class ApiService {
     final resp = await http.post(
       Uri.parse('$_apiUrl/subscription/upgrade'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
     if (resp.statusCode != 200) {
       throw Exception('Ошибка обновления подписки');
     }
@@ -280,7 +285,7 @@ class ApiService {
     final resp = await http.delete(
       Uri.parse('$_apiUrl/account'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
     if (resp.statusCode != 200) {
       throw Exception(jsonDecode(resp.body)['detail'] ?? 'Ошибка удаления аккаунта');
     }
@@ -292,7 +297,7 @@ class ApiService {
     final resp = await http.get(
       Uri.parse('$_apiUrl/referral/code'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
     if (resp.statusCode != 200) {
       throw Exception(jsonDecode(resp.body)['detail'] ?? 'Ошибка получения кода');
     }
@@ -304,7 +309,7 @@ class ApiService {
       Uri.parse('$_apiUrl/referral/apply'),
       headers: _headers,
       body: jsonEncode({'code': code}),
-    );
+    ).timeout(_timeout);
     if (resp.statusCode != 200) {
       throw Exception(jsonDecode(resp.body)['detail'] ?? 'Ошибка активации кода');
     }
@@ -315,7 +320,7 @@ class ApiService {
     final resp = await http.get(
       Uri.parse('$_apiUrl/referral/stats'),
       headers: _headers,
-    );
+    ).timeout(_timeout);
     if (resp.statusCode != 200) {
       throw Exception(jsonDecode(resp.body)['detail'] ?? 'Ошибка загрузки статистики');
     }
@@ -328,7 +333,7 @@ class ApiService {
       await http.post(
         Uri.parse('$_apiUrl/auth/onboarding/complete'),
         headers: _headers,
-      );
+      ).timeout(_timeout);
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(AppConfig.onboardingDoneKey, true);
     } catch (_) {
