@@ -1,0 +1,77 @@
+name: Test & Deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Куда деплоить"
+        required: true
+        default: staging
+        type: choice
+        options: [staging, prod]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: pip install -r backend/requirements.txt
+      - run: cd backend && python -m pytest tests/ -q
+
+  deploy-staging:
+    needs: test
+    if: github.event_name == 'push' || github.event.inputs.target == 'staging'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to staging
+        env:
+          SSH_KEY: ${{ secrets.VOICE_DIARY_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          rsync -av --delete \
+            --exclude=venv --exclude=.venv --exclude=__pycache__ --exclude='*.pyc' \
+            --exclude=.pytest_cache --exclude=.env --exclude=uploads --exclude=backups \
+            --exclude=test.db \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            backend/ deploy@80.78.246.188:/opt/voice-diary-staging/
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no deploy@80.78.246.188 \
+            "sudo systemctl restart voice-diary-staging.service && sleep 2 && sudo systemctl is-active voice-diary-staging.service"
+      - name: Health check
+        run: |
+          sleep 2
+          curl -sf https://moy-way.ru:8443/health
+
+  deploy-prod:
+    needs: test
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'prod'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to prod
+        env:
+          SSH_KEY: ${{ secrets.VOICE_DIARY_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          rsync -av \
+            --exclude=venv --exclude=.venv --exclude=__pycache__ --exclude='*.pyc' \
+            --exclude=.pytest_cache --exclude=.env --exclude=uploads --exclude=backups \
+            --exclude=test.db \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            backend/ deploy@80.78.246.188:/opt/voice-diary/
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no deploy@80.78.246.188 \
+            "sudo systemctl restart voice-diary.service && sleep 3 && sudo systemctl is-active voice-diary.service"
+      - name: Health check
+        run: |
+          sleep 2
+          curl -sf https://moy-way.ru/health
