@@ -5,6 +5,7 @@ import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 import httpx
@@ -59,8 +60,15 @@ async def transcribe_audio(
                 status_code=413,
                 detail=f"Аудио слишком большое (максимум {MAX_AUDIO_UPLOAD_BYTES // (1024 * 1024)}МБ)",
             )
-        s3_key = upload_audio_to_s3(audio_bytes, user_id, file.filename or "audio.ogg")
-        text = local_transcribe(audio_bytes, file.filename or "audio.ogg")
+        # run_in_threadpool — оба вызова синхронные и блокирующие (ffmpeg +
+        # faster-whisper CPU-инференс, boto3 сетевой I/O). Вызванные напрямую
+        # внутри async def, они блокировали бы весь event loop воркера —
+        # ЛЮБОЙ другой запрос на этом воркере (не только другая транскрипция)
+        # ждал бы, пока не закончится текущая. При двух одновременных записях
+        # (обычное дело для дневника, которым пользуются утром/вечером)
+        # это уже заметная деградация.
+        s3_key = await run_in_threadpool(upload_audio_to_s3, audio_bytes, user_id, file.filename or "audio.ogg")
+        text = await run_in_threadpool(local_transcribe, audio_bytes, file.filename or "audio.ogg")
         audit_log(db, user_id, "transcribe", ip, f"audio_s3_key={s3_key}")
         return {"text": text, "user_id": user_id, "audio_s3_key": s3_key}
     except HTTPException:
