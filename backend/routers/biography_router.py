@@ -11,7 +11,7 @@ from models import DiaryEntry, DiaryBiography, User
 from schemas import BiographyUpdate
 from auth import get_current_user, get_client_ip
 from audit import audit_log
-from subscription import check_limit, increment_usage
+from subscription import check_and_increment_usage, decrement_usage
 from prompts import BIOGRAPHY_PROMPT
 from ai_service import call_deepseek_sync
 
@@ -52,7 +52,6 @@ def generate_biography(
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    check_limit(user_id, db, "biography_generations")
     entries = (
         db.query(DiaryEntry)
         .filter(DiaryEntry.user_id == user_id)
@@ -63,7 +62,15 @@ def generate_biography(
         raise HTTPException(status_code=400, detail="Нет записей для составления биографии")
     context = build_biography_context(entries)
     prompt = BIOGRAPHY_PROMPT.format(context=context)
-    content = call_deepseek_sync(prompt, "biography_generate", user_id, max_tokens=4000, temperature=0.8, timeout=120.0)
+    # Атомарное резервирование лимита прямо перед вызовом ИИ — не
+    # check_limit()+increment_usage() отдельными шагами (TOCTOU), окно
+    # гонки тут ещё больше — включает сетевой вызов DeepSeek (до 120с).
+    check_and_increment_usage(user_id, db, "biography_generations")
+    try:
+        content = call_deepseek_sync(prompt, "biography_generate", user_id, max_tokens=4000, temperature=0.8, timeout=120.0)
+    except Exception:
+        decrement_usage(user_id, db, "biography_generations")  # не наказываем за сбой ИИ
+        raise
     bio = db.query(DiaryBiography).filter(DiaryBiography.user_id == user_id).first()
     if bio:
         bio.content = content
@@ -73,7 +80,6 @@ def generate_biography(
         bio = DiaryBiography(user_id=user_id, content=content, generated_at=datetime.now(timezone.utc))
         db.add(bio)
     db.commit()
-    increment_usage(user_id, db, "biography_generations")
     audit_log(db, user_id, "biography_generate", get_client_ip(request), f"entries={len(entries)}")
     return {"content": content, "entries_analyzed": len(entries)}
 

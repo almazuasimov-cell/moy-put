@@ -13,7 +13,7 @@ from models import DiaryEntry
 from schemas import DiaryEntryCreate, ProcessRequest, ProcessResponse
 from auth import get_current_user, get_client_ip
 from audit import audit_log
-from subscription import check_limit, increment_usage
+from subscription import check_limit, check_and_increment_usage
 from s3_service import upload_audio_to_s3, delete_audio_from_s3
 from prompts import PROCESS_ENTRY_PROMPT
 from ai_service import call_deepseek_async
@@ -113,12 +113,13 @@ def create_entry(
     # Единственная точка реального списания лимита voice_entries — здесь
     # запись действительно попадает в дневник, независимо от того, прошла
     # ли она через /stt/transcribe и /entries/process или была отправлена напрямую.
-    check_limit(user_id, db, "voice_entries")
+    # Атомарно (не check_limit + increment_usage отдельными шагами — TOCTOU,
+    # два параллельных запроса могли оба пройти проверку раньше коммита).
+    check_and_increment_usage(user_id, db, "voice_entries")
     entry = DiaryEntry(user_id=user_id, **data.model_dump())
     db.add(entry)
     db.commit()
     db.refresh(entry)
-    increment_usage(user_id, db, "voice_entries")
     audit_log(db, user_id, "create_entry", get_client_ip(request), f"entry_id={entry.id}")
     return _entry_out(entry)
 

@@ -216,6 +216,60 @@ def test_process_entry_enforces_free_limit():
     assert resp.status_code == 402
 
 
+def test_check_and_increment_usage_is_atomic():
+    # BUG: check_limit()+increment_usage() отдельными шагами — TOCTOU,
+    # два параллельных запроса могли оба пройти проверку раньше коммита.
+    # Прямой юнит-тест на саму функцию (не через HTTP — конкурентность
+    # синхронным TestClient не сымитировать, проверяем корректность границы).
+    from subscription import check_and_increment_usage, get_or_create_subscription
+
+    token = _get_token("9990000113")
+    db = SessionLocal()
+    # Достаём user_id из токена так же, как это делает auth.get_current_user
+    from jose import jwt as jose_jwt
+    from config import SECRET_KEY, ALGORITHM
+    user_id = int(jose_jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])["sub"])
+
+    from fastapi import HTTPException
+
+    sub = get_or_create_subscription(user_id, db)
+    assert sub.voice_entries_used == 0
+    for _ in range(3):  # FREE_LIMITS["voice_entries"] == 3
+        check_and_increment_usage(user_id, db, "voice_entries")
+    db.refresh(sub)
+    assert sub.voice_entries_used == 3
+    with pytest.raises(HTTPException) as exc_info:
+        check_and_increment_usage(user_id, db, "voice_entries")
+    assert exc_info.value.status_code == 402
+    db.refresh(sub)
+    assert sub.voice_entries_used == 3  # не превысило лимит при отказе
+    db.close()
+
+
+def test_search_refunds_quota_on_ai_failure(monkeypatch):
+    # Резервируем лимит перед вызовом DeepSeek — если сам вызов упал
+    # (сеть, DeepSeek недоступен), квота не должна списываться.
+    # raise_server_exceptions=False — TestClient по умолчанию поднимает
+    # необработанные исключения заново вместо 500 (для отладки тестов),
+    # реальный клиент в проде получил бы обычный Starlette-500.
+    import routers.search_router as search_mod
+    local_client = TestClient(app, raise_server_exceptions=False)
+
+    def _boom(*a, **kw):
+        raise RuntimeError("DeepSeek недоступен")
+    monkeypatch.setattr(search_mod, "call_deepseek_sync", _boom)
+
+    token = _get_token("9990000114")
+    headers = {"Authorization": f"Bearer {token}"}
+    local_client.post("/entries", json={"transcript_text": "запись для поиска", "mood": 5}, headers=headers)
+
+    resp = local_client.post("/search", json={"query": "как дела"}, headers=headers)
+    assert resp.status_code == 500
+
+    resp = client.get("/subscription", headers=headers)
+    assert resp.json()["ai_searches_used"] == 0  # квота вернулась после сбоя
+
+
 def test_list_entries():
     token = _get_token("9990000102")
     client.post("/entries", json={
