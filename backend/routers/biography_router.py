@@ -13,7 +13,7 @@ from auth import get_current_user, get_client_ip
 from audit import audit_log
 from subscription import check_and_increment_usage, decrement_usage
 from prompts import BIOGRAPHY_PROMPT
-from ai_service import call_deepseek_sync
+from ai_service import call_deepseek_async
 
 router = APIRouter(tags=["biography"])
 
@@ -47,7 +47,7 @@ def build_biography_context(entries_desc, max_chars: int = MAX_BIOGRAPHY_CONTEXT
 
 
 @router.post("/biography/generate")
-def generate_biography(
+async def generate_biography(
     request: Request,
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -67,7 +67,10 @@ def generate_biography(
     # гонки тут ещё больше — включает сетевой вызов DeepSeek (до 120с).
     check_and_increment_usage(user_id, db, "biography_generations")
     try:
-        content = call_deepseek_sync(prompt, "biography_generate", user_id, max_tokens=4000, temperature=0.8, timeout=120.0)
+        # async, не call_deepseek_sync — синхронная версия с retry на
+        # time.sleep() блокировала бы поток из пула на несколько минут
+        # при недоступности DeepSeek (3 попытки × до 120с таймаут + sleep).
+        content = await call_deepseek_async(prompt, "biography_generate", user_id, max_tokens=4000, temperature=0.8, timeout=120.0)
     except Exception:
         decrement_usage(user_id, db, "biography_generations")  # не наказываем за сбой ИИ
         raise

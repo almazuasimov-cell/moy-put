@@ -9,13 +9,13 @@ from auth import get_current_user, get_client_ip
 from audit import audit_log
 from subscription import check_and_increment_usage, decrement_usage
 from prompts import SEARCH_PROMPT
-from ai_service import call_deepseek_sync
+from ai_service import call_deepseek_async
 
 router = APIRouter(tags=["search"])
 
 
 @router.post("/search")
-def search_diary(
+async def search_diary(
     data: SearchRequest,
     request: Request,
     user_id: int = Depends(get_current_user),
@@ -44,7 +44,10 @@ def search_diary(
     # окно гонки тут ещё больше — включает сетевой вызов DeepSeek).
     check_and_increment_usage(user_id, db, "ai_searches")
     try:
-        answer = call_deepseek_sync(prompt, "search", user_id, max_tokens=2000, temperature=0.7)
+        # async, не call_deepseek_sync — синхронная версия с retry на
+        # time.sleep() блокировала бы поток из пула на несколько минут
+        # при недоступности DeepSeek (3 попытки × таймаут + sleep).
+        answer = await call_deepseek_async(prompt, "search", user_id, max_tokens=2000, temperature=0.7)
     except Exception:
         decrement_usage(user_id, db, "ai_searches")  # не наказываем за сбой ИИ
         raise

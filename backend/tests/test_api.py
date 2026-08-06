@@ -255,9 +255,9 @@ def test_search_refunds_quota_on_ai_failure(monkeypatch):
     import routers.search_router as search_mod
     local_client = TestClient(app, raise_server_exceptions=False)
 
-    def _boom(*a, **kw):
+    async def _boom(*a, **kw):
         raise RuntimeError("DeepSeek недоступен")
-    monkeypatch.setattr(search_mod, "call_deepseek_sync", _boom)
+    monkeypatch.setattr(search_mod, "call_deepseek_async", _boom)
 
     token = _get_token("9990000114")
     headers = {"Authorization": f"Bearer {token}"}
