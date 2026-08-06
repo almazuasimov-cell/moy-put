@@ -159,28 +159,38 @@ class _RecordScreenState extends State<RecordScreen> with WidgetsBindingObserver
       await _audioRecorder.stop();
       if (!mounted) return;
       setState(() => _isRecording = false);
-
-      // Auto-transcribe
       if (_recordingPath != null) {
-        setState(() => _isProcessing = true);
-        try {
-          final (text, audioS3Key) = await ApiService.transcribeAudio(File(_recordingPath!));
-          if (!mounted) return;
-          _textController.text = text;
-          _audioS3Key = audioS3Key;
-          setState(() => _isProcessing = false);
-          // Auto-process
-          await _process();
-        } catch (e) {
-          if (!mounted) return;
-          setState(() => _isProcessing = false);
-          _showError('Распознавание: $e');
-        }
+        await _transcribeAndProcess();
       }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isRecording = false);
       _showError('Ошибка остановки: $e');
+    }
+  }
+
+  /// Отдельный метод (не inline в _stopRecording), чтобы его можно было
+  /// повторить кнопкой "Повторить" при сбое — аудиофайл никуда не делся,
+  /// пересаписывать запись с нуля не нужно.
+  Future<void> _transcribeAndProcess() async {
+    setState(() => _isProcessing = true);
+    try {
+      final (text, audioS3Key) = await ApiService.transcribeAudio(File(_recordingPath!));
+      if (!mounted) return;
+      _textController.text = text;
+      _audioS3Key = audioS3Key;
+      setState(() => _isProcessing = false);
+      await _process();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Распознавание: $e'),
+          backgroundColor: Colors.red.shade700,
+          action: SnackBarAction(label: 'Повторить', onPressed: _transcribeAndProcess),
+        ),
+      );
     }
   }
 
