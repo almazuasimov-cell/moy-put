@@ -111,7 +111,10 @@ class ApiService {
   }
 
   // ── STT ───────────────────────────────────────────────
-  static Future<String> transcribeAudio(File audioFile) async {
+  // Возвращает (текст, ключ аудио в S3) — audio_s3_key нужен, чтобы
+  // при сохранении записи привязать её к загруженному аудио, иначе
+  // файл навсегда остаётся "осиротевшим" в хранилище.
+  static Future<(String text, String? audioS3Key)> transcribeAudio(File audioFile) async {
     final req = http.MultipartRequest(
       'POST',
       Uri.parse('$_apiUrl/stt/transcribe'),
@@ -124,7 +127,8 @@ class ApiService {
       throw Exception(jsonDecode(body)['detail'] ?? 'Ошибка распознавания');
     }
     final body = await resp.stream.bytesToString();
-    return jsonDecode(body)['text'] as String;
+    final data = jsonDecode(body);
+    return (data['text'] as String, data['audio_s3_key'] as String?);
   }
 
   // ── AI Process ────────────────────────────────────────

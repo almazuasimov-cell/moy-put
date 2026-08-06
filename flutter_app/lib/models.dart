@@ -13,6 +13,7 @@ class DiaryEntry {
   final String reflection;
   final String? createdAt;
   final String? updatedAt;
+  final String? audioS3Key;
 
   DiaryEntry({
     this.id,
@@ -26,6 +27,7 @@ class DiaryEntry {
     this.reflection = '',
     this.createdAt,
     this.updatedAt,
+    this.audioS3Key,
   });
 
   factory DiaryEntry.fromJson(Map<String, dynamic> json) {
@@ -41,6 +43,7 @@ class DiaryEntry {
       reflection: (json['reflection'] ?? '') as String,
       createdAt: json['created_at'] as String?,
       updatedAt: json['updated_at'] as String?,
+      audioS3Key: json['audio_s3_key'] as String?,
     );
   }
 
@@ -64,6 +67,7 @@ class DiaryEntry {
     'topics': topics,
     'ai_summary': aiSummary,
     'reflection': reflection,
+    if (audioS3Key != null) 'audio_s3_key': audioS3Key,
   };
 
   String get formattedDate {

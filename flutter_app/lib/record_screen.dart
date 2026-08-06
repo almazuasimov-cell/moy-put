@@ -24,6 +24,7 @@ class _RecordScreenState extends State<RecordScreen> {
   bool _isProcessing = false;
   bool _hasProcessed = false;
   String? _recordingPath;
+  String? _audioS3Key;
 
   ProcessResult? _result;
   int _mood = 5;
@@ -41,6 +42,7 @@ class _RecordScreenState extends State<RecordScreen> {
       _tags = e.tags;
       _aiSummary = e.aiSummary;
       _reflection = e.reflection;
+      _audioS3Key = e.audioS3Key;
       _hasProcessed = true;
     }
   }
@@ -96,9 +98,10 @@ class _RecordScreenState extends State<RecordScreen> {
       if (_recordingPath != null) {
         setState(() => _isProcessing = true);
         try {
-          final text = await ApiService.transcribeAudio(File(_recordingPath!));
+          final (text, audioS3Key) = await ApiService.transcribeAudio(File(_recordingPath!));
           if (!mounted) return;
           _textController.text = text;
+          _audioS3Key = audioS3Key;
           setState(() => _isProcessing = false);
           // Auto-process
           await _process();
@@ -157,6 +160,7 @@ class _RecordScreenState extends State<RecordScreen> {
         topics: _result?.topics ?? [],
         aiSummary: _aiSummary,
         reflection: _reflection,
+        audioS3Key: _audioS3Key,
       );
       if (widget.existingEntry?.id != null) {
         await ApiService.updateEntry(widget.existingEntry!.id!, entry);
