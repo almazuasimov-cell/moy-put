@@ -155,6 +155,20 @@ def test_create_entry():
     assert "семья" in data["tags"]
 
 
+def test_create_entry_saves_audio_s3_key():
+    # BUG: audio_s3_key отсутствовал в схеме DiaryEntryCreate — аудио,
+    # загруженное через /stt/transcribe, никогда не привязывалось к
+    # записи и навсегда оставалось "осиротевшим" в S3.
+    token = _get_token("9990000108")
+    resp = client.post("/entries", json={
+        "transcript_text": "Запись с аудио",
+        "mood": 5,
+        "audio_s3_key": "audio/108/test-key.m4a",
+    }, headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    assert resp.json()["audio_s3_key"] == "audio/108/test-key.m4a"
+
+
 def test_create_entry_enforces_free_limit():
     # SECURITY: POST /entries раньше не проверял лимит voice_entries вообще —
     # можно было создавать записи напрямую, минуя /stt/transcribe.
@@ -389,3 +403,22 @@ def test_delete_account():
     # тихий пустой список (см. test_deleted_user_token_returns_401_not_500).
     resp = client.get("/entries", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 401
+
+
+def test_delete_account_anonymizes_audit_log_not_deletes():
+    # BUG: журнал аудита стирался вместе с аккаунтом вместо анонимизации —
+    # схема объявляла ondelete="SET NULL", код делал жёсткий .delete().
+    token = _get_token("9990000501")
+    db = SessionLocal()
+    count_before = db.query(AuditLog).count()
+    db.close()
+    assert count_before > 0  # register + login уже что-то залогировали
+
+    client.delete("/account", headers={"Authorization": f"Bearer {token}"})
+
+    db = SessionLocal()
+    count_after = db.query(AuditLog).count()
+    anonymized = db.query(AuditLog).filter(AuditLog.user_id.is_(None)).count()
+    db.close()
+    assert count_after == count_before  # ничего не удалено
+    assert anonymized > 0  # хотя бы что-то анонимизировано

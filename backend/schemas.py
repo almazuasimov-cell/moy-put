@@ -36,6 +36,9 @@ class DiaryEntryCreate(BaseModel):
     topics: list = []
     ai_summary: str = ""
     reflection: str = ""
+    # Раньше отсутствовал в схеме — audio_s3_key от /stt/transcribe
+    # никогда не сохранялся, аудио навсегда оставалось "осиротевшим" в S3.
+    audio_s3_key: Optional[str] = None
 
 
 class ProcessRequest(BaseModel):

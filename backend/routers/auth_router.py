@@ -71,7 +71,12 @@ def delete_account(
     db.query(DiaryEntry).filter(DiaryEntry.user_id == user_id).delete()
     db.query(DiaryBiography).filter(DiaryBiography.user_id == user_id).delete()
     db.query(Subscription).filter(Subscription.user_id == user_id).delete()
-    db.query(AuditLog).filter(AuditLog.user_id == user_id).delete()
+    # Журнал аудита анонимизируем (user_id → NULL), а не стираем — записи
+    # об удалении аккаунта, входах и т.п. должны пережить сам аккаунт.
+    # Модель уже объявляет ondelete="SET NULL" на этом FK, но полагаться
+    # на уровень БД ненадёжно кроссбазово (SQLite не включает FK по
+    # умолчанию) — делаем анонимизацию явно в коде.
+    db.query(AuditLog).filter(AuditLog.user_id == user_id).update({"user_id": None})
     db.query(Referral).filter(
         (Referral.inviter_id == user_id) | (Referral.invited_id == user_id)
     ).delete()
