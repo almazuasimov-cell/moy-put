@@ -2,6 +2,7 @@
 import pytest
 import sys
 import os
+from datetime import datetime, timedelta, timezone
 
 # Add backend to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -422,3 +423,42 @@ def test_delete_account_anonymizes_audit_log_not_deletes():
     db.close()
     assert count_after == count_before  # ничего не удалено
     assert anonymized > 0  # хотя бы что-то анонимизировано
+
+
+# ── Audio retention cron job ────────────────────────────────────
+
+def test_cleanup_old_audio_deletes_from_s3_keeps_entry(monkeypatch):
+    # Политика конфиденциальности обещает автоудаление аудио через
+    # AUDIO_RETENTION_DAYS — раньше в коде не было ни одной cron-задачи,
+    # которая бы это делала. Текст записи должен остаться, удаляется
+    # только S3-объект + обнуляется audio_s3_key.
+    import cleanup_old_audio as cleanup_mod
+
+    token = _get_token("9990000600")
+    resp = client.post("/entries", json={
+        "transcript_text": "Старая запись с аудио", "mood": 5,
+        "audio_s3_key": "audio/600/old.m4a",
+    }, headers={"Authorization": f"Bearer {token}"})
+    entry_id = resp.json()["id"]
+
+    # created_at выставляем в прошлое напрямую в БД — через API это не задать.
+    db = SessionLocal()
+    old_date = datetime.now(timezone.utc) - timedelta(days=cleanup_mod.AUDIO_RETENTION_DAYS + 1)
+    db.query(DiaryEntry).filter(DiaryEntry.id == entry_id).update({"created_at": old_date})
+    db.commit()
+    db.close()
+
+    deleted_keys = []
+    monkeypatch.setattr(cleanup_mod, "get_s3", lambda: True)
+    monkeypatch.setattr(cleanup_mod, "delete_audio_from_s3", lambda key: deleted_keys.append(key))
+
+    count = cleanup_mod.cleanup_old_audio()
+
+    assert count == 1
+    assert deleted_keys == ["audio/600/old.m4a"]
+    db = SessionLocal()
+    entry = db.query(DiaryEntry).filter(DiaryEntry.id == entry_id).first()
+    db.close()
+    assert entry is not None  # текст остался
+    assert entry.transcript_text == "Старая запись с аудио"
+    assert entry.audio_s3_key is None  # аудио отвязано
