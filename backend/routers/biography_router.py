@@ -1,5 +1,6 @@
 """Biography generation, CRUD, PDF export."""
 import io
+import os
 from datetime import datetime, timezone
 from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -94,8 +95,18 @@ def export_biography_pdf(
         from reportlab.lib.units import mm
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
         from reportlab.lib.enums import TA_CENTER
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
     except ImportError:
         raise HTTPException(status_code=500, detail="reportlab не установлен")
+    # Стандартные PDF-шрифты (Helvetica и т.п.) не содержат кириллицу —
+    # текст показывался квадратиками. DejaVu Sans поддерживает кириллицу
+    # полностью, шрифт лежит в репозитории (backend/fonts/), чтобы не
+    # зависеть от того, установлен ли он в системе на сервере.
+    _fonts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "fonts")
+    if "DejaVuSans" not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(TTFont("DejaVuSans", os.path.join(_fonts_dir, "DejaVuSans.ttf")))
+        pdfmetrics.registerFont(TTFont("DejaVuSans-Bold", os.path.join(_fonts_dir, "DejaVuSans-Bold.ttf")))
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
@@ -103,10 +114,10 @@ def export_biography_pdf(
         title=f"Биография — {author_name}", author=author_name,
     )
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle("CustomTitle", parent=styles["Title"], fontSize=22, spaceAfter=6 * mm, alignment=TA_CENTER)
-    subtitle_style = ParagraphStyle("CustomSubtitle", parent=styles["Normal"], fontSize=10, textColor="#666666", alignment=TA_CENTER, spaceAfter=12 * mm)
-    body_style = ParagraphStyle("CustomBody", parent=styles["Normal"], fontSize=11, leading=16, spaceAfter=4 * mm)
-    h2_style = ParagraphStyle("CustomH2", parent=styles["Heading2"], fontSize=16, spaceBefore=8 * mm, spaceAfter=4 * mm)
+    title_style = ParagraphStyle("CustomTitle", parent=styles["Title"], fontName="DejaVuSans-Bold", fontSize=22, spaceAfter=6 * mm, alignment=TA_CENTER)
+    subtitle_style = ParagraphStyle("CustomSubtitle", parent=styles["Normal"], fontName="DejaVuSans", fontSize=10, textColor="#666666", alignment=TA_CENTER, spaceAfter=12 * mm)
+    body_style = ParagraphStyle("CustomBody", parent=styles["Normal"], fontName="DejaVuSans", fontSize=11, leading=16, spaceAfter=4 * mm)
+    h2_style = ParagraphStyle("CustomH2", parent=styles["Heading2"], fontName="DejaVuSans-Bold", fontSize=16, spaceBefore=8 * mm, spaceAfter=4 * mm)
     story = []
     story.append(Paragraph("Биография", title_style))
     story.append(Paragraph(f"«Мой путь» — {author_name}", subtitle_style))

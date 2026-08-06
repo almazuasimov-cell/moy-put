@@ -351,6 +351,11 @@ def test_biography_pdf_export_cyrillic_name():
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "application/pdf"
     assert "filename*=UTF-8''" in resp.headers["content-disposition"]
+    # BUG: стандартные PDF-шрифты (Helvetica) не содержат кириллицу —
+    # текст показывался квадратиками. Проверяем, что в PDF реально
+    # встроен шрифт с поддержкой кириллицы, а не дефолтный Helvetica.
+    assert b"DejaVuSans" in resp.content
+    assert b"/BaseFont/Helvetica" not in resp.content
 
 
 # ── Stats / Health tests ───────────────────────────────────────
