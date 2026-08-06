@@ -143,6 +143,23 @@ def _get_token(phone="9990000100"):
     return resp.json()["access_token"]
 
 
+def test_transcribe_rejects_oversized_audio(monkeypatch):
+    # BUG: не было лимита на размер загружаемого аудио — большой файл
+    # мог нагрузить небольшой VPS (ffmpeg + faster-whisper).
+    import routers.entries_router as entries_mod
+    monkeypatch.setattr(entries_mod, "MAX_AUDIO_UPLOAD_BYTES", 10)
+    monkeypatch.setattr(entries_mod, "local_transcribe", lambda *a, **kw: "не должно вызваться")
+    monkeypatch.setattr(entries_mod, "upload_audio_to_s3", lambda *a, **kw: "не должно вызваться")
+
+    token = _get_token("9990000112")
+    resp = client.post(
+        "/stt/transcribe",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("test.m4a", b"x" * 100, "audio/m4a")},
+    )
+    assert resp.status_code == 413
+
+
 def test_create_entry():
     token = _get_token("9990000101")
     resp = client.post("/entries", json={
@@ -336,6 +353,35 @@ def test_referral_stats():
 
 
 # ── Biography tests ─────────────────────────────────────────────
+
+def test_build_biography_context_caps_size():
+    # BUG: генерация биографии слала ИИ вообще все записи без ограничения —
+    # у активных "долгих" дневниководов рано или поздно превысило бы
+    # контекстное окно модели. entries переданы новыми первыми (desc),
+    # как их реально отдаёт запрос в generate_biography.
+    from routers.biography_router import build_biography_context
+
+    class FakeEntry:
+        def __init__(self, day, text):
+            self.created_at = datetime(2026, 1, day, tzinfo=timezone.utc)
+            self.structured_text = text
+            self.transcript_text = text
+
+    # Каждый блок ("[дата] " + текст) занимает ~43 символа.
+    entries_desc = [
+        FakeEntry(3, "N" * 30),  # самая новая
+        FakeEntry(2, "M" * 30),  # средняя
+        FakeEntry(1, "O" * 30),  # самая старая
+    ]
+    context = build_biography_context(entries_desc, max_chars=90)
+
+    assert "N" * 30 in context  # новая точно вошла
+    assert "M" * 30 in context  # средняя влезла (43+43=86 <= 90)
+    assert "O" * 30 not in context  # старая не влезла (86+43=129 > 90)
+    assert "[Примечание: 1 более старых записей" in context  # честно сказано, что опущено
+    # Хронологический порядок сохранён — средняя (старее) идёт раньше новой
+    assert context.index("M" * 30) < context.index("N" * 30)
+
 
 def test_biography_pdf_export_cyrillic_name():
     # BUG: Content-Disposition раньше содержал кириллицу автора напрямую —

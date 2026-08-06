@@ -18,6 +18,7 @@ from s3_service import upload_audio_to_s3, delete_audio_from_s3
 from prompts import PROCESS_ENTRY_PROMPT
 from ai_service import call_deepseek_async
 from stt_service import transcribe_audio as local_transcribe
+from config import MAX_AUDIO_UPLOAD_BYTES
 
 router = APIRouter(tags=["entries"])
 
@@ -52,6 +53,11 @@ async def transcribe_audio(
     ip = get_client_ip(request)
     try:
         audio_bytes = await file.read()
+        if len(audio_bytes) > MAX_AUDIO_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Аудио слишком большое (максимум {MAX_AUDIO_UPLOAD_BYTES // (1024 * 1024)}МБ)",
+            )
         s3_key = upload_audio_to_s3(audio_bytes, user_id, file.filename or "audio.ogg")
         text = local_transcribe(audio_bytes, file.filename or "audio.ogg")
         audit_log(db, user_id, "transcribe", ip, f"audio_s3_key={s3_key}")

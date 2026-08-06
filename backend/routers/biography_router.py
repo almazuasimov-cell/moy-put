@@ -17,6 +17,34 @@ from ai_service import call_deepseek_sync
 
 router = APIRouter(tags=["biography"])
 
+MAX_BIOGRAPHY_CONTEXT_CHARS = 50_000
+
+
+def build_biography_context(entries_desc, max_chars: int = MAX_BIOGRAPHY_CONTEXT_CHARS) -> str:
+    """entries_desc — записи, отсортированные по created_at убыванию (новые первыми).
+
+    Без ограничения контекст рос неограниченно вместе с числом записей —
+    у активных "долгих" дневниководов (целевая аудитория) рано или поздно
+    превысил бы контекстное окно модели и генерация начала бы падать.
+    Берём самые свежие записи в пределах бюджета символов, затем
+    возвращаем в хронологический порядок для промпта.
+    """
+    context_parts = []
+    total_chars = 0
+    skipped = 0
+    for e in entries_desc:
+        date_str = e.created_at.strftime("%d.%m.%Y") if e.created_at else "?"
+        part = f"[{date_str}] {e.structured_text or e.transcript_text}"
+        if total_chars + len(part) > max_chars:
+            skipped += 1
+            continue
+        context_parts.append(part)
+        total_chars += len(part)
+    context_parts.reverse()  # обратно в хронологический порядок
+    if skipped:
+        context_parts.insert(0, f"[Примечание: {skipped} более старых записей не поместились в контекст и опущены]")
+    return "\n\n".join(context_parts)
+
 
 @router.post("/biography/generate")
 def generate_biography(
@@ -28,16 +56,12 @@ def generate_biography(
     entries = (
         db.query(DiaryEntry)
         .filter(DiaryEntry.user_id == user_id)
-        .order_by(DiaryEntry.created_at.asc())
+        .order_by(DiaryEntry.created_at.desc())
         .all()
     )
     if not entries:
         raise HTTPException(status_code=400, detail="Нет записей для составления биографии")
-    context_parts = []
-    for e in entries:
-        date_str = e.created_at.strftime("%d.%m.%Y") if e.created_at else "?"
-        context_parts.append(f"[{date_str}] {e.structured_text or e.transcript_text}")
-    context = "\n\n".join(context_parts)
+    context = build_biography_context(entries)
     prompt = BIOGRAPHY_PROMPT.format(context=context)
     content = call_deepseek_sync(prompt, "biography_generate", user_id, max_tokens=4000, temperature=0.8, timeout=120.0)
     bio = db.query(DiaryBiography).filter(DiaryBiography.user_id == user_id).first()
