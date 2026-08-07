@@ -95,7 +95,7 @@ def app_version():
     return {
         "version": APP_VERSION,
         "version_code": APP_VERSION_CODE,
-        "changelog": "Прослушивание записи до сохранения, отмена записи, возврат к записи при сбое сети, undo при удалении, корректная кириллица в PDF",
+        "changelog": "Исправлена запись голоса: раньше запись обрывалась/удалялась при блокировке экрана — теперь продолжается в фоне",
         "is_required": False,
         "apk_url": "https://moy-way.ru/apk/app-release.apk",
     }

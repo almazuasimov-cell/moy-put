@@ -17,7 +17,7 @@ class RecordScreen extends StatefulWidget {
   State<RecordScreen> createState() => _RecordScreenState();
 }
 
-class _RecordScreenState extends State<RecordScreen> with WidgetsBindingObserver {
+class _RecordScreenState extends State<RecordScreen> {
   final _audioRecorder = AudioRecorder();
   final _audioPlayer = AudioPlayer();
   final _textController = TextEditingController();
@@ -38,7 +38,6 @@ class _RecordScreenState extends State<RecordScreen> with WidgetsBindingObserver
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _audioPlayer.onPlayerComplete.listen((_) {
       if (mounted) setState(() => _isPlaying = false);
     });
@@ -56,20 +55,10 @@ class _RecordScreenState extends State<RecordScreen> with WidgetsBindingObserver
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _textController.dispose();
     _audioRecorder.dispose();
     _audioPlayer.dispose();
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Входящий звонок, сворачивание приложения и т.п. во время записи —
-    // не оставляем recorder работать в никуда, аккуратно останавливаем.
-    if (state == AppLifecycleState.paused && _isRecording) {
-      _cancelRecording();
-    }
   }
 
   Future<void> _togglePlayback() async {
@@ -138,8 +127,15 @@ class _RecordScreenState extends State<RecordScreen> with WidgetsBindingObserver
   }
 
   /// Отменить запись в процессе — остановить и удалить файл, без
-  /// распознавания/сохранения. Также срабатывает при сворачивании
-  /// приложения (входящий звонок и т.п.) во время записи.
+  /// распознавания/сохранения.
+  ///
+  /// BUG-FIX: раньше это же вызывалось автоматически из
+  /// didChangeAppLifecycleState при AppLifecycleState.paused — блокировка
+  /// экрана во время долгой записи (5-10 минут, телефон в кармане) тоже
+  /// переводит приложение в paused, и запись обрывалась/удалялась именно
+  /// поэтому, а не из-за реального прерывания. Запись теперь продолжается
+  /// в фоне (процесс приложения жив, record/MediaRecorder не завязан на
+  /// видимость экрана) — отменить её можно только явно, кнопкой ✕.
   Future<void> _cancelRecording() async {
     try {
       final path = await _audioRecorder.stop();
