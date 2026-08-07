@@ -177,7 +177,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'Пригласи друга — получите по 300₽',
+                                'Пригласи друга — получите по 10 дней Premium',
                                 style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                               ),
                             ],

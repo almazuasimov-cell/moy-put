@@ -95,7 +95,7 @@ def app_version():
     return {
         "version": APP_VERSION,
         "version_code": APP_VERSION_CODE,
-        "changelog": "Исправлена запись голоса: раньше запись обрывалась/удалялась при блокировке экрана — теперь продолжается в фоне",
+        "changelog": "В профиле поправлен текст реферальной программы (было устаревшее «300₽», теперь «10 дней Premium»)",
         "is_required": False,
         "apk_url": "https://moy-way.ru/apk/app-release.apk",
     }
