@@ -63,9 +63,12 @@ async def generate_biography(
         raise HTTPException(status_code=400, detail="Нет записей для составления биографии")
     context = build_biography_context(entries)
     prompt = BIOGRAPHY_PROMPT.format(context=context)
-    # Атомарное резервирование лимита прямо перед вызовом ИИ — не
-    # check_limit()+increment_usage() отдельными шагами (TOCTOU), окно
-    # гонки тут ещё больше — включает сетевой вызов DeepSeek (до 120с).
+    # Вызывается вручную, а не через subscription.require_quota(...) как
+    # Depends — та зависимость выполнилась бы ДО тела роута и списала бы
+    # лимит даже для пустого дневника (см. ранний return выше). Атомарное
+    # резервирование лимита прямо перед вызовом ИИ — не check_limit()+
+    # increment_usage() отдельными шагами (TOCTOU), окно гонки тут ещё
+    # больше — включает сетевой вызов DeepSeek (до 120с).
     check_and_increment_usage(user_id, db, "biography_generations")
     try:
         # async, не call_deepseek_sync — синхронная версия с retry на

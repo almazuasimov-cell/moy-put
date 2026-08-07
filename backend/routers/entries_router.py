@@ -13,7 +13,7 @@ from models import DiaryEntry, User
 from schemas import DiaryEntryCreate, ProcessRequest, ProcessResponse
 from auth import get_current_user, get_client_ip
 from audit import audit_log
-from subscription import check_limit, check_and_increment_usage
+from subscription import require_quota
 from s3_service import delete_audio_from_s3
 from prompts import PROCESS_ENTRY_PROMPT
 from ai_service import call_deepseek_async
@@ -44,13 +44,13 @@ def _entry_out(e: DiaryEntry) -> dict:
 async def transcribe_audio(
     request: Request,
     file: UploadFile = File(...),
-    user: User = Depends(get_current_user),
+    # spend=False — расход лимита учитывается при сохранении записи
+    # (POST /entries), здесь только предварительная проверка (не тратим
+    # Whisper впустую на запрос, у которого и так нет квоты на запись).
+    user: User = Depends(require_quota("voice_entries", spend=False)),
     db: Session = Depends(get_db),
 ):
     user_id = user.id
-    # Расход лимита учитывается при сохранении записи (POST /entries),
-    # здесь только предварительная проверка — не тратим Whisper впустую.
-    check_limit(user_id, db, "voice_entries")
     ip = get_client_ip(request)
     try:
         audio_bytes = await file.read()
@@ -89,13 +89,12 @@ async def transcribe_audio(
 async def process_entry(
     data: ProcessRequest,
     request: Request,
-    user: User = Depends(get_current_user),
+    # spend=False — тот же лимит voice_entries, что и /stt/transcribe;
+    # не тратим DeepSeek впустую, но списание — только при POST /entries.
+    user: User = Depends(require_quota("voice_entries", spend=False)),
     db: Session = Depends(get_db),
 ):
     user_id = user.id
-    # Тот же лимит voice_entries — не тратим DeepSeek на пользователя,
-    # у которого уже нет квоты на запись дневника. Списание — при POST /entries.
-    check_limit(user_id, db, "voice_entries")
     try:
         prompt = PROCESS_ENTRY_PROMPT.format(text=data.text)
         content = await call_deepseek_async(prompt, "process_entry", user_id, max_tokens=2000, temperature=0.7)
@@ -125,16 +124,17 @@ async def process_entry(
 def create_entry(
     data: DiaryEntryCreate,
     request: Request,
-    user: User = Depends(get_current_user),
+    # Единственная точка реального списания лимита voice_entries — здесь
+    # запись действительно попадает в дневник, независимо от того, прошла
+    # ли она через /stt/transcribe и /entries/process или была отправлена
+    # напрямую. Списание — часть сигнатуры роута (require_quota), не тела
+    # функции: новый эндпоинт не сможет случайно забыть про лимит, если
+    # использует ту же зависимость. Атомарно внутри require_quota (не
+    # check_limit + increment_usage отдельными шагами — TOCTOU).
+    user: User = Depends(require_quota("voice_entries", spend=True)),
     db: Session = Depends(get_db),
 ):
     user_id = user.id
-    # Единственная точка реального списания лимита voice_entries — здесь
-    # запись действительно попадает в дневник, независимо от того, прошла
-    # ли она через /stt/transcribe и /entries/process или была отправлена напрямую.
-    # Атомарно (не check_limit + increment_usage отдельными шагами — TOCTOU,
-    # два параллельных запроса могли оба пройти проверку раньше коммита).
-    check_and_increment_usage(user_id, db, "voice_entries")
     entry = DiaryEntry(user_id=user_id, **data.model_dump())
     db.add(entry)
     db.commit()

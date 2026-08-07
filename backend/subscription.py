@@ -1,9 +1,11 @@
 """Subscription management: limits, usage tracking."""
 from datetime import datetime, timedelta, timezone
-from fastapi import HTTPException
+from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
-from models import Subscription
+from database import get_db
+from models import Subscription, User
 from config import FREE_LIMITS, PREMIUM_LIMITS
+from auth import get_current_user
 
 
 def _aware(dt: datetime) -> datetime:
@@ -91,6 +93,31 @@ def check_and_increment_usage(user_id: int, db: Session, field: str) -> None:
             status_code=402,
             detail=f"Лимит исчерпан ({field}: {used}/{limit}). Обновите подписку до Premium."
         )
+
+
+def require_quota(field: str, spend: bool = True):
+    """FastAPI-зависимость: проверяет лимит `field` ДО выполнения тела роута
+    (и, если spend=True, атомарно списывает его) — заменяет собой ручной вызов
+    check_limit()/check_and_increment_usage() первой строкой в функции роута.
+    Раньше проверку лимита можно было просто забыть добавить в новый
+    AI-эндпоинт; теперь она — часть сигнатуры роута, не тело функции.
+
+    Использовать ТОЛЬКО там, где лимит должен расходоваться безусловно при
+    каждом вызове (нет ветвления с ранним return ДО списания в исходном коде).
+    Если списание должно происходить только при каком-то условии (например,
+    "если в дневнике вообще есть записи для анализа" — см. /search,
+    /biography/generate) — эта зависимость не подходит, т.к. выполняется
+    раньше тела роута и списала бы лимит даже для запроса, который сам роут
+    решил бы не тратить. В таких случаях check_and_increment_usage()/
+    check_limit() по-прежнему вызываются вручную внутри тела роута.
+    """
+    def _dependency(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> User:
+        if spend:
+            check_and_increment_usage(user.id, db, field)
+        else:
+            check_limit(user.id, db, field)
+        return user
+    return _dependency
 
 
 def decrement_usage(user_id: int, db: Session, field: str) -> None:

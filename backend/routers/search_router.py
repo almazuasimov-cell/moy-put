@@ -39,10 +39,13 @@ async def search_diary(
         )
     context = "\n\n".join(context_parts)
     prompt = SEARCH_PROMPT.format(context=context, query=data.query)
-    # Атомарное резервирование лимита прямо перед вызовом ИИ — не
-    # check_limit()+increment_usage() отдельными шагами (TOCTOU: два
-    # параллельных запроса могли оба пройти проверку раньше коммита,
-    # окно гонки тут ещё больше — включает сетевой вызов DeepSeek).
+    # Вызывается вручную, а не через subscription.require_quota(...) как
+    # Depends — та зависимость выполнилась бы ДО тела роута и списала бы
+    # лимит даже для пустого дневника (см. ранний return выше). Атомарное
+    # резервирование лимита прямо перед вызовом ИИ — не check_limit()+
+    # increment_usage() отдельными шагами (TOCTOU: два параллельных
+    # запроса могли оба пройти проверку раньше коммита, окно гонки тут
+    # ещё больше — включает сетевой вызов DeepSeek).
     check_and_increment_usage(user_id, db, "ai_searches")
     try:
         # async, не call_deepseek_sync — синхронная версия с retry на
