@@ -1,9 +1,32 @@
-/// Онбординг — 3 экрана при первом запуске
+/// Онбординг — 4 экрана при первом запуске (цитата + 3 про функции)
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 import 'auth_screen.dart';
 import 'config.dart';
+
+/// Цитаты про память, историю и личный путь — задают тон перед разбором
+/// функций приложения. Первая страница онбординга выбирается случайно
+/// из этого списка при каждом первом запуске.
+const _quotes = [
+  (
+    text: 'История — свидетель времён, свет истины, жизнь памяти, учительница жизни.',
+    author: 'Цицерон',
+  ),
+  (
+    text: 'Жизнь — не то, что прожил человек, а то, что он помнит и как помнит, чтобы рассказать.',
+    author: 'Габриэль Гарсиа Маркес',
+  ),
+  (
+    text: 'Тот, кто не помнит своего прошлого, обречён пережить его снова.',
+    author: 'Джордж Сантаяна',
+  ),
+  (
+    text: 'Жизнь можно понять, лишь оглядываясь назад, но прожить её нужно, глядя вперёд.',
+    author: 'Сёрен Кьеркегор',
+  ),
+];
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -15,30 +38,43 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _pageController = PageController();
   int _currentPage = 0;
+  late final List<_OnboardingPage> _pages;
 
-  static const _pages = [
-    _OnboardingPage(
-      icon: Icons.mic_rounded,
-      title: 'Рассказывай о себе',
-      description:
-          'Просто нажми на микрофон и говори.\nAI превратит твой голос в красивую\nдневниковую запись.',
-      color: Color(0xFF6750A4),
-    ),
-    _OnboardingPage(
-      icon: Icons.auto_awesome_rounded,
-      title: 'AI анализирует твой путь',
-      description:
-          'Настроение, теги, темы, вопросы\nдля размышления — AI помогает\nпонять себя глубже.',
-      color: Color(0xFF386A20),
-    ),
-    _OnboardingPage(
-      icon: Icons.menu_book_rounded,
-      title: 'Твоя биография\nрастёт с каждым днём',
-      description:
-          'Из всех записей AI напишет твою\nличную книгу. А позже — создаст\nфильм о твоей жизни.',
-      color: Color(0xFF9C4040),
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    final quote = _quotes[Random().nextInt(_quotes.length)];
+    _pages = [
+      _OnboardingPage(
+        icon: Icons.format_quote_rounded,
+        title: quote.text,
+        description: '— ${quote.author}',
+        color: const Color(0xFFB08968),
+        isQuote: true,
+      ),
+      const _OnboardingPage(
+        icon: Icons.mic_rounded,
+        title: 'Рассказывай о себе',
+        description:
+            'Просто нажми на микрофон и говори.\nAI превратит твой голос в красивую\nдневниковую запись.',
+        color: Color(0xFF6750A4),
+      ),
+      const _OnboardingPage(
+        icon: Icons.auto_awesome_rounded,
+        title: 'AI анализирует твой путь',
+        description:
+            'Настроение, теги, темы, вопросы\nдля размышления — AI помогает\nпонять себя глубже.',
+        color: Color(0xFF386A20),
+      ),
+      const _OnboardingPage(
+        icon: Icons.menu_book_rounded,
+        title: 'Твоя биография\nрастёт с каждым днём',
+        description:
+            'Из всех записей AI напишет твою\nличную книгу. А позже — создаст\nфильм о твоей жизни.',
+        color: Color(0xFF9C4040),
+      ),
+    ];
+  }
 
   void _finish() async {
     final prefs = await SharedPreferences.getInstance();
@@ -147,12 +183,14 @@ class _OnboardingPage {
   final String title;
   final String description;
   final Color color;
+  final bool isQuote;
 
   const _OnboardingPage({
     required this.icon,
     required this.title,
     required this.description,
     required this.color,
+    this.isQuote = false,
   });
 
   Widget build(BuildContext context) {
@@ -174,14 +212,20 @@ class _OnboardingPage {
             child: Icon(icon, size: 64, color: color),
           ),
           const SizedBox(height: 48),
-          // Title
+          // Title (цитата — курсивом и чуть меньше, обычный заголовок — жирным)
           Text(
-            title,
+            isQuote ? '«$title»' : title,
             textAlign: TextAlign.center,
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onSurface,
-            ),
+            style: isQuote
+                ? theme.textTheme.titleLarge?.copyWith(
+                    fontStyle: FontStyle.italic,
+                    color: theme.colorScheme.onSurface,
+                    height: 1.5,
+                  )
+                : theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurface,
+                  ),
           ),
           const SizedBox(height: 20),
           // Description

@@ -95,7 +95,7 @@ def app_version():
     return {
         "version": APP_VERSION,
         "version_code": APP_VERSION_CODE,
-        "changelog": "В профиле поправлен текст реферальной программы (было устаревшее «300₽», теперь «10 дней Premium»)",
+        "changelog": "Новый экран приветствия при первом запуске: цитата про историю и память перед знакомством с приложением",
         "is_required": False,
         "apk_url": "https://moy-way.ru/apk/app-release.apk",
     }

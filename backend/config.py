@@ -65,5 +65,5 @@ PREMIUM_LIMITS = {
 }
 
 # ── App version ───────────────────────────────────────────────
-APP_VERSION = "2.3.2"
-APP_VERSION_CODE = 232
+APP_VERSION = "2.3.3"
+APP_VERSION_CODE = 233
