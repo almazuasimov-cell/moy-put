@@ -128,8 +128,20 @@
   .cta h2 { font-size: 28px; font-weight: 700; margin-bottom: 16px; color: #e0e0ff; }
   .cta p { color: #8888a0; margin-bottom: 32px; }
 
+  /* Privacy banner */
+  .privacy-banner {
+    background: rgba(56,106,32,0.1); border-top: 1px solid rgba(56,106,32,0.3); border-bottom: 1px solid rgba(56,106,32,0.3);
+    padding: 24px 0;
+  }
+  .privacy-banner .inner { display: flex; align-items: flex-start; gap: 16px; max-width: 720px; margin: 0 auto; }
+  .privacy-banner .icon { font-size: 28px; flex-shrink: 0; line-height: 1; }
+  .privacy-banner h3 { font-size: 16px; font-weight: 800; color: #e0e0ff; margin-bottom: 6px; }
+  .privacy-banner p { font-size: 14px; color: #a0c090; margin: 0; }
+  .privacy-banner a { color: #b388ff; font-weight: 600; }
+
   /* Footer */
   footer { text-align: center; padding: 32px 0; color: #555; font-size: 13px; border-top: 1px solid rgba(255,255,255,0.04); }
+  footer a { color: #7C5CBF; }
 
   @media (max-width: 600px) {
     .hero { padding: 60px 0 40px; }
@@ -151,6 +163,18 @@
       <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M17.9 17.39c-.26-.8-1.01-1.39-1.9-1.39h-1v-3a1 1 0 0 0-1-1H8v-2h2a1 1 0 0 0 1-1V7h2a2 2 0 0 0 2-2v-.41c2.93 1.18 5 4.05 5 7.41 0 2.08-.8 3.97-2.1 5.39zM11 19.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.22.21-1.79L9 15v1a1 1 0 0 0 1 1h1v2.93zM12 1a11 11 0 1 0 0 22 11 11 0 0 0 0-22z"/></svg>
       Скачать приложение
     </a>
+  </div>
+</section>
+
+<section class="privacy-banner">
+  <div class="container">
+    <div class="inner">
+      <div class="icon">🔒</div>
+      <div>
+        <h3>Защита персональных данных — по 152-ФЗ</h3>
+        <p>Данные хранятся на серверах в России, передаются только по защищённому HTTPS-соединению и никогда не продаются и не передаются рекламным сетям. Голосовые записи и биография доступны только тебе, удалить их можно в любой момент. <a href="/privacy.html">Политика конфиденциальности →</a></p>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -274,7 +298,7 @@
 
 <footer>
   <div class="container">
-    © 2026 «Мой путь» — AI Voice Diary. Все права защищены.
+    © 2026 «Мой путь» — AI Voice Diary. Все права защищены. · <a href="/privacy.html">Политика конфиденциальности</a>
   </div>
 </footer>
 

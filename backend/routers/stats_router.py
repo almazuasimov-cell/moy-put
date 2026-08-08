@@ -95,7 +95,7 @@ def app_version():
     return {
         "version": APP_VERSION,
         "version_code": APP_VERSION_CODE,
-        "changelog": "Новый экран приветствия при первом запуске: цитата про историю и память перед знакомством с приложением",
+        "changelog": "На экране входа добавлено заметное уведомление о защите данных по 152-ФЗ, исправлена ссылка на политику конфиденциальности",
         "is_required": False,
         "apk_url": "https://moy-way.ru/apk/app-release.apk",
     }

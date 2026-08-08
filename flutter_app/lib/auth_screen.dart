@@ -1,4 +1,5 @@
 /// Экран входа/регистрации
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'api_service.dart';
@@ -82,7 +83,7 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _openPrivacyPolicy() async {
-    final url = '${ApiService.apiUrl}/privacy';
+    final url = '${ApiService.apiUrl}/privacy.html';
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -124,7 +125,47 @@ class _AuthScreenState extends State<AuthScreen> {
                   color: cs.onSurfaceVariant,
                 ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 24),
+
+              // 152-ФЗ notice
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer.withOpacity(0.35),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: cs.primary.withOpacity(0.25)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('🔒', style: TextStyle(fontSize: 20)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: RichText(
+                        text: TextSpan(
+                          style: TextStyle(fontSize: 12.5, height: 1.4, color: cs.onSurface),
+                          children: [
+                            const TextSpan(
+                              text: 'Защита данных по 152-ФЗ. ',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            const TextSpan(
+                              text: 'Твои записи хранятся на серверах в России, никогда не '
+                                  'продаются и не передаются рекламодателям. ',
+                            ),
+                            TextSpan(
+                              text: 'Подробнее →',
+                              style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600),
+                              recognizer: (TapGestureRecognizer()..onTap = _openPrivacyPolicy),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
 
               // Toggle
               SegmentedButton<bool>(
